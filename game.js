@@ -3,7 +3,8 @@
 
   const UP=0, RIGHT=1, DOWN=2, LEFT=3;
   const DELTAS=[[-1,0],[0,1],[1,0],[0,-1]], OPP=[DOWN,LEFT,UP,RIGHT];
-  const COLORS={green:'#79bd74',blue:'#7597bb',mixed:'#5c5c5c'};
+  const COLORS={green:'#79bd74',blue:'#7597bb',red:'#d76767',mixed:'#5c5c5c'};
+  const PATH_COLORS=['green','blue','red'];
   const $=selector=>document.querySelector(selector);
   const board=$('#board'),frame=$('#boardFrame'),stageLabel=$('#stageLabel'),homeButton=$('#homeButton'),gameScreen=$('#gameScreen'),homeScreen=$('#homeScreen'),homeStageList=$('#homeStageList'),resetProgressButton=$('#resetProgressButton'),resetModal=$('#resetModal'),resetNoButton=$('#resetNoButton'),resetYesButton=$('#resetYesButton'),adminModeButton=$('#adminModeButton');
   const moveCard=$('#moveCard'),moveGradeLabel=$('#moveGradeLabel'),moveUsed=$('#moveUsed'),moveTarget=$('#moveTarget');
@@ -78,26 +79,64 @@
       {at:[1,3],role:'start',color:'blue',locked:false},{at:[5,4],role:'finish',color:'blue',locked:true}
     ]}
   ];
-  // Stage 11~30: authored branching routes. A shared trunk fans out through T junctions to 3–4 finishes.
+  // Stage 11~30: compact branching puzzles. No long straight-line labor.
   const copyStage=stage=>JSON.parse(JSON.stringify(stage));
   const baseCampaign=STAGES.slice();
-  const makeCombStage=(rows,cols,finishCount,color,filterCount=0)=>{
-    const spineRow=Math.floor(rows*.58),columns=Array.from({length:finishCount},(_,order)=>Math.max(1,Math.min(cols-1,Math.round((order+1)*(cols-1)/(finishCount+1))))),start=[rows-1,0];
-    const trunk=Array.from({length:rows-spineRow},(_,offset)=>[rows-1-offset,0]);
-    const paths=columns.map(column=>{const spine=Array.from({length:column},(_,offset)=>[spineRow,offset+1]),branch=Array.from({length:spineRow},(_,offset)=>[spineRow-1-offset,column]);return {color,points:[...trunk,...spine,...branch]};});
+  const makeCompactBranch=(color,finishCount,filterCount=0)=>{
+    const rows=4,cols=6,spineRow=2,start=[3,0],columns=Array.from({length:finishCount},(_,index)=>index+1),trunk=[start,[spineRow,0]];
+    const paths=columns.map(column=>{const spine=Array.from({length:column},(_,offset)=>[spineRow,offset+1]);return {color,points:[...trunk,...spine,[1,column],[0,column]]};});
     const specials=columns.slice(0,-1).map(column=>({at:[spineRow,column],type:'tee'}));
-    const filterCandidates=columns.map(column=>[Math.max(1,spineRow-1),column]);
-    for(let index=0;index<Math.min(filterCount,filterCandidates.length);index++)specials.push({at:filterCandidates[index],type:'filter',color});
-    return {rows,cols,paths,specials,endpoints:[{at:start,role:'start',color,locked:rows%2===0},...columns.map(column=>({at:[0,column],role:'finish',color,locked:column%2===0}))]};
+    for(let index=0;index<Math.min(filterCount,columns.length);index++)specials.push({at:[1,columns[index]],type:'filter',color});
+    return {rows,cols,paths,specials,endpoints:[{at:start,role:'start',color,locked:true},...columns.map(column=>({at:[0,column],role:'finish',color,locked:column%2===0}))]};
+  };
+  // Three-color layouts are deliberately compact: the challenge comes from choosing
+  // which colored route claims each junction, never from a long snake of straights.
+  const makeTriCross=(colors=['green','blue','red'])=>{
+    const [primary,secondary,tertiary]=colors;
+    return {rows:6,cols:6,paths:[
+      {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[3,2],[3,3],[3,4],[2,4],[1,4],[0,4]]},
+      {color:primary,points:[[2,4],[2,5],[1,5],[0,5]]},
+      {color:secondary,points:[[0,3],[1,3],[2,3],[3,3],[4,3],[5,3]]},
+      {color:tertiary,points:[[0,0],[1,0],[2,0]]}
+    ],specials:[{at:[3,3],type:'cross'},{at:[2,4],type:'tee'},{at:[1,0],type:'filter',color:tertiary},{at:[1,3],type:'filter',color:secondary},{at:[1,4],type:'filter',color:primary}],endpoints:[
+      {at:[5,0],role:'start',color:primary,locked:true},{at:[0,4],role:'finish',color:primary,locked:false},{at:[0,5],role:'finish',color:primary,locked:true},
+      {at:[0,3],role:'start',color:secondary,locked:false},{at:[5,3],role:'finish',color:secondary,locked:true},
+      {at:[0,0],role:'start',color:tertiary,locked:true},{at:[2,0],role:'finish',color:tertiary,locked:false}
+    ]};
+  };
+  const makeTriDual=(colors=['green','blue','red'])=>{
+    const [primary,secondary,tertiary]=colors;
+    return {rows:6,cols:6,paths:[
+      {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
+      {color:secondary,points:[[0,5],[1,5],[2,5],[3,5],[3,4],[3,3],[4,3],[5,3]]},
+      {color:tertiary,points:[[0,0],[1,0],[2,0]]}
+    ],specials:[{at:[3,3],type:'dual'},{at:[1,0],type:'filter',color:tertiary},{at:[1,3],type:'filter',color:primary},{at:[1,5],type:'filter',color:secondary},{at:[2,5],type:'filter',color:secondary}],endpoints:[
+      {at:[5,0],role:'start',color:primary,locked:false},{at:[0,3],role:'finish',color:primary,locked:true},
+      {at:[0,5],role:'start',color:secondary,locked:true},{at:[5,3],role:'finish',color:secondary,locked:false},
+      {at:[0,0],role:'start',color:tertiary,locked:true},{at:[2,0],role:'finish',color:tertiary,locked:false}
+    ]};
+  };
+  const makeTriBranch=(colors=['green','blue','red'])=>{
+    const [primary,secondary,tertiary]=colors;
+    return {rows:5,cols:7,paths:[
+      {color:primary,points:[[4,0],[3,0],[2,0],[2,1],[1,1],[0,1]]},
+      {color:primary,points:[[2,1],[2,2],[2,3],[1,3],[0,3]]},
+      {color:primary,points:[[2,3],[2,4],[1,4],[0,4]]},
+      {color:secondary,points:[[0,5],[1,5],[2,5],[3,5],[4,5]]},
+      {color:tertiary,points:[[3,1],[3,2],[3,3],[3,4],[3,5],[3,6]]}
+    ],specials:[{at:[2,1],type:'tee'},{at:[2,3],type:'tee'},{at:[3,5],type:'cross'},{at:[3,3],type:'filter',color:tertiary},{at:[1,1],type:'filter',color:primary},{at:[1,3],type:'filter',color:primary},{at:[1,4],type:'filter',color:primary},{at:[1,5],type:'filter',color:secondary},{at:[2,2],type:'filter',color:primary}],preAligned:[[2,0]],endpoints:[
+      {at:[4,0],role:'start',color:primary,locked:true},{at:[0,1],role:'finish',color:primary,locked:false},{at:[0,3],role:'finish',color:primary,locked:true},{at:[0,4],role:'finish',color:primary,locked:false},
+      {at:[0,5],role:'start',color:secondary,locked:false},{at:[4,5],role:'finish',color:secondary,locked:true},
+      {at:[3,1],role:'start',color:tertiary,locked:true},{at:[3,6],role:'finish',color:tertiary,locked:false}
+    ]};
   };
   const branchCampaign=[
-    makeCombStage(6,6,3,'green',1), makeCombStage(6,7,3,'blue',1), copyStage(baseCampaign[9]),
-    makeCombStage(7,7,4,'green',2), copyStage(baseCampaign[8]), makeCombStage(7,8,4,'blue',2),
-    copyStage(baseCampaign[9]), makeCombStage(8,8,4,'green',2), copyStage(baseCampaign[9]),
-    makeCombStage(8,9,4,'blue',3), makeCombStage(9,9,4,'green',3), copyStage(baseCampaign[9]),
-    makeCombStage(9,10,4,'blue',3), copyStage(baseCampaign[8]), makeCombStage(10,10,4,'green',3),
-    copyStage(baseCampaign[9]), makeCombStage(10,11,4,'blue',3), copyStage(baseCampaign[8]),
-    makeCombStage(11,11,4,'green',3), makeCombStage(11,12,4,'blue',3)
+    // 11~14 reinforce branching and two-color routing; 15~30 are three-color decision puzzles.
+    makeCompactBranch('blue',3,1), makeCompactBranch('red',4,1), copyStage(baseCampaign[8]), copyStage(baseCampaign[9]),
+    makeTriCross(), makeTriDual(['blue','green','red']), makeTriBranch(), makeTriCross(['red','green','blue']),
+    makeTriBranch(['blue','green','red']), makeTriDual(['green','red','blue']), makeTriCross(['blue','red','green']), makeTriBranch(['red','blue','green']),
+    makeTriDual(['red','blue','green']), makeTriCross(['green','blue','red']), makeTriBranch(['green','red','blue']), makeTriDual(['blue','red','green']),
+    makeTriCross(['red','green','blue']), makeTriBranch(['blue','red','green']), makeTriDual(['green','blue','red']), makeTriBranch(['red','green','blue'])
   ];
   branchCampaign.forEach(stage=>STAGES.push(stage));
   const TEST_STAGE_COUNT=STAGES.length;
@@ -195,7 +234,7 @@
   ];
   const lastLayoutByStage=Array(STAGES.length).fill(null);
 
-  const STORAGE_KEY='line-puzzle-campaign-v1';
+  const STORAGE_KEY='line-puzzle-campaign-v3';
   const initialProgress=()=>({unlocked:1,current:0,results:{},solutions:{}});
   function loadProgress(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));if(saved&&Number.isInteger(saved.unlocked)&&saved.results)return {...initialProgress(),...saved};}catch(error){}return initialProgress();}
   function saveProgress(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(progress));}catch(error){}}
@@ -258,16 +297,16 @@ let adminMode=false;
   }
   // T교차로는 기존 색이 끊길 때만 다른 색으로 바뀝니다.
   function resolveConnections(stage){
-    const raw={green:traverseColor(stage,'green',true,true),blue:traverseColor(stage,'blue',true,true)};
+    const raw={green:traverseColor(stage,'green',true,true),blue:traverseColor(stage,'blue',true,true),red:traverseColor(stage,'red',true,true)};
     stage.tiles.forEach((tile,index)=>{
       if(tile.type!=='tee')return;
-      const candidates=['green','blue'].filter(color=>[...raw[color]].some(state=>Number(state.split(':')[0])===index));
+      const candidates=PATH_COLORS.filter(color=>[...raw[color]].some(state=>Number(state.split(':')[0])===index));
       if(tile.claimedColor&&!candidates.includes(tile.claimedColor))tile.claimedColor=null;
       if(!tile.claimedColor&&candidates.length)tile.claimedColor=candidates[0];
     });
     // states는 클리어 판정용, visualStates는 양쪽 끝에서 이어진 길의 실시간 색상 표시용입니다.
-    const states={green:traverseColor(stage,'green'),blue:traverseColor(stage,'blue')};
-    const visualStates={green:traverseColor(stage,'green',false,true),blue:traverseColor(stage,'blue',false,true)};
+    const states={green:traverseColor(stage,'green'),blue:traverseColor(stage,'blue'),red:traverseColor(stage,'red')};
+    const visualStates={green:traverseColor(stage,'green',false,true),blue:traverseColor(stage,'blue',false,true),red:traverseColor(stage,'red',false,true)};
     const colorsByTile=Array.from({length:stage.tiles.length},()=>new Set());
     Object.entries(visualStates).forEach(([color,portsSet])=>portsSet.forEach(state=>colorsByTile[Number(state.split(':')[0])].add(color)));
     // 시작 직후에는 끝점만 색상을 유지해, 미조작 블록이 Move를 쓴 것처럼 보이지 않게 합니다.
@@ -310,7 +349,7 @@ let adminMode=false;
     // 랭킹 공정성을 위해 같은 스테이지는 항상 같은 초기 타일 상태를 사용합니다.
     let seed=((index+1)*2654435761+templateIndex*1013904223+variant.length*374761393)>>>0;
     const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
-    const definition=transformedStage(STAGE_TEMPLATES[index][templateIndex],variant),edgeMap=new Map(),specialMap=new Map((definition.specials||[]).map(item=>[pointKey(item.at),item]));
+    const definition=transformedStage(STAGE_TEMPLATES[index][templateIndex],variant),edgeMap=new Map(),specialMap=new Map((definition.specials||[]).map(item=>[pointKey(item.at),item])),preAligned=new Set((definition.preAligned||[]).map(pointKey));
     definition.paths.forEach(({points})=>{
       for(let step=0;step<points.length-1;step++){
         const first=pointKey(points[step]),second=pointKey(points[step+1]);
@@ -333,6 +372,7 @@ let adminMode=false;
       const type=random()<.5?'straight':'corner',rotation=Math.floor(random()*(type==='straight'?2:4));
       return {type,target:rotation,rotation,required:false,touched:false};
     });
+    tiles.forEach((tile,index)=>{const row=Math.floor(index/definition.cols),column=index%definition.cols;tile.preAligned=preAligned.has(pointKey([row,column]));});
     const stage={index,variant,templateIndex,rows:definition.rows,cols:definition.cols,tiles,moves:0,locked:true,animating:false,hasPlayerMoved:false};
     tiles.forEach(tile=>{
       if(tile.type==='cross')return;
@@ -341,7 +381,7 @@ let adminMode=false;
         return;
       }
       const span=tile.type==='straight'||tile.type==='filter'?2:4;
-      if(tile.required)tile.rotation=(tile.target+1+Math.floor(random()*(span-1)))%span;
+      if(tile.required&&!tile.preAligned)tile.rotation=(tile.target+1+Math.floor(random()*(span-1)))%span;
     });
     tiles.forEach(tile=>{tile.origin=tile.rotation;});
     stage.perfectMoves=tiles.filter(tile=>tile.required&&tile.type!=='endpoint'&&tile.type!=='cross'&&tile.origin!==tile.target).length;
@@ -350,7 +390,7 @@ let adminMode=false;
     const movableCount=tiles.filter(tile=>tile.type!=='endpoint'&&tile.type!=='cross').length;
     // Perfect를 기준으로 한 번의 여유만 등급마다 주고, +3회부터는 실패가 됩니다.
     // 작은 보드에서도 모든 조작 가능 블록을 다 만지기 전에 실패하도록 상한을 둡니다.
-    stage.maxMoves=Math.min(stage.perfectMoves+3,movableCount-1);
+    stage.maxMoves=Math.min(stage.perfectMoves+3,movableCount-1,14);
     stage.greatMoves=Math.min(stage.perfectMoves+1,stage.maxMoves);
     stage.goodMoves=Math.min(stage.perfectMoves+2,stage.maxMoves);
     if(stage.maxMoves<=stage.perfectMoves)throw new Error('Perfect 이후의 여유 Move를 만들 수 없습니다.');
@@ -386,7 +426,8 @@ let adminMode=false;
     for(let attempt=0;attempt<80;attempt++){
       const stage=buildStage(index,layout.variant,layout.templateIndex),connections=resolveConnections(stage);
       if(isComplete(stage,connections))continue;
-      if(stage.greatMoves<=stage.perfectMoves||stage.maxMoves<=stage.greatMoves)continue;
+      // Current UI evaluates only PERFECT and MAX MOVES. One valid extra move is enough. 
+      if(stage.maxMoves<=stage.perfectMoves)continue;
       stage.connections=connections;lastLayoutByStage[index]=layout.key;return stage;
     }
     throw new Error('유효한 테스트 스테이지를 만들지 못했습니다.');
@@ -415,7 +456,7 @@ let adminMode=false;
   function dualLaneColors(tile,index,connections){
     const lanes=[rotate([UP,RIGHT],tile.rotation),rotate([LEFT,DOWN],tile.rotation)];
     return lanes.map(lane=>{
-      const colors=['green','blue'].filter(color=>lane.some(direction=>connections.visualStates[color].has(key(index,direction))));
+      const colors=PATH_COLORS.filter(color=>lane.some(direction=>connections.visualStates[color].has(key(index,direction))));
       return colors[0]||null;
     });
   }
@@ -512,8 +553,15 @@ let adminMode=false;
 
   function showGame(){homeScreen.classList.remove('show');gameScreen.classList.remove('hidden');}
   function showHome(){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');startOverlay.classList.remove('show');resetModal.classList.remove('show');gameScreen.classList.add('hidden');homeScreen.classList.add('show');renderHome();requestAnimationFrame(()=>{const focus=homeStageList.querySelector('.current')||homeStageList.lastElementChild;if(focus)focus.scrollIntoView({block:'center'});});}
-  function renderHome(){adminModeButton.textContent=adminMode?'BACK':'ADMIN';homeStageList.innerHTML='';for(let index=0;index<TEST_STAGE_COUNT;index++){const result=progress.results[index];const status=adminMode?'current':result==='Perfect'?'perfect':result?'clear':index===progress.current?'current':'locked';const button=document.createElement('button');button.type='button';button.className=`home-stage ${status}`;button.disabled=status==='locked';const number=pad(index+1);button.innerHTML=`<span>STAGE ${number}</span>${status==='perfect'?'<strong>PERFECT CLEAR!</strong>':status==='clear'?'<strong>CLEAR!</strong>':''}`;if(status==='perfect')button.addEventListener('click',()=>begin(index,{viewer:true}));else if(status==='clear'||status==='current')button.addEventListener('click',()=>begin(index));homeStageList.append(button);}}
-  function begin(index,{viewer=false}={}){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');showGame();game=createStage(index,viewer?progress.solutions[index]:null);game.viewer=viewer;if(viewer){game.tiles.forEach(tile=>{tile.rotation=tile.target;tile.displayAngle=undefined;});game.hasPlayerMoved=true;game.locked=true;render();return;}if(!progress.results[index])progress.current=index;saveProgress();startOverlay.innerHTML='<span>PERFECT MOVES</span><strong>'+pad(game.perfectMoves)+'</strong>';render();startOverlay.classList.remove('show');void startOverlay.offsetWidth;startOverlay.classList.add('show');startTimeout=setTimeout(()=>{startOverlay.classList.remove('show');game.locked=false;render();},1000);}
+  function openHomeStage(index){
+    if(!Number.isInteger(index)||index<0||index>=TEST_STAGE_COUNT)return;
+    if(adminMode){begin(index);return;}
+    const result=progress.results[index];
+    if(result==='Perfect')begin(index,{viewer:true});
+    else if(result==='Clear'||index===progress.current)begin(index);
+  }
+  function renderHome(){adminModeButton.textContent=adminMode?'BACK':'ADMIN';homeStageList.innerHTML='';for(let index=0;index<TEST_STAGE_COUNT;index++){const result=progress.results[index];const status=adminMode?'current':result==='Perfect'?'perfect':result?'clear':index===progress.current?'current':'locked';const button=document.createElement('button');button.type='button';button.className=`home-stage ${status}`;button.value=String(index);button.disabled=status==='locked';const number=pad(index+1);button.innerHTML=`<span>STAGE ${number}</span>${status==='perfect'?'<strong>PERFECT CLEAR!</strong>':status==='clear'?'<strong>CLEAR!</strong>':''}`;button.onclick=function(){openHomeStage(Number(this.value));};homeStageList.append(button);}}
+  function begin(index,{viewer=false}={}){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');const nextGame=createStage(index,viewer?progress.solutions[index]:null);game=nextGame;showGame();game.viewer=viewer;if(viewer){game.tiles.forEach(tile=>{tile.rotation=tile.target;tile.displayAngle=undefined;});game.hasPlayerMoved=true;game.locked=true;render();return;}if(!progress.results[index])progress.current=index;saveProgress();startOverlay.innerHTML='<span>PERFECT MOVES</span><strong>'+pad(game.perfectMoves)+'</strong>';render();startOverlay.classList.remove('show');void startOverlay.offsetWidth;startOverlay.classList.add('show');startTimeout=setTimeout(()=>{startOverlay.classList.remove('show');game.locked=false;render();},1000);}
   function clearGrade(){return game.moves<=game.perfectMoves?'Perfect':'Clear';}
   function clearStage(){game.locked=true;game.grade=clearGrade();progress.solutions[game.index]={templateIndex:game.templateIndex,variant:game.variant};progress.results[game.index]=game.grade==='Perfect'?'Perfect':(progress.results[game.index]||'Clear');if(game.grade==='Perfect')progress.results[game.index]='Perfect';progress.unlocked=Math.min(TEST_STAGE_COUNT,Math.max(progress.unlocked,game.index+2));progress.current=Math.min(TEST_STAGE_COUNT-1,game.index+1);saveProgress();clearInterval(timerId);render();[...board.children].forEach(tile=>tile.classList.add('clear-pop'));setTimeout(()=>showModal(true),420);}
   function over(reason){game.locked=true;clearInterval(timerId);showModal(false,reason);}
