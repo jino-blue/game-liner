@@ -5,7 +5,7 @@
   const DELTAS=[[-1,0],[0,1],[1,0],[0,-1]], OPP=[DOWN,LEFT,UP,RIGHT];
   const COLORS={green:'#79bd74',blue:'#7597bb',mixed:'#5c5c5c'};
   const $=selector=>document.querySelector(selector);
-  const board=$('#board'),frame=$('#boardFrame'),stageLabel=$('#stageLabel'),homeButton=$('#homeButton'),gameScreen=$('#gameScreen'),homeScreen=$('#homeScreen'),homeStageList=$('#homeStageList'),resetProgressButton=$('#resetProgressButton'),resetModal=$('#resetModal'),resetNoButton=$('#resetNoButton'),resetYesButton=$('#resetYesButton');
+  const board=$('#board'),frame=$('#boardFrame'),stageLabel=$('#stageLabel'),homeButton=$('#homeButton'),gameScreen=$('#gameScreen'),homeScreen=$('#homeScreen'),homeStageList=$('#homeStageList'),resetProgressButton=$('#resetProgressButton'),resetModal=$('#resetModal'),resetNoButton=$('#resetNoButton'),resetYesButton=$('#resetYesButton'),adminModeButton=$('#adminModeButton');
   const moveCard=$('#moveCard'),moveGradeLabel=$('#moveGradeLabel'),moveUsed=$('#moveUsed'),moveTarget=$('#moveTarget');
   const startOverlay=$('#startOverlay'),restartButton=$('#restartButton');  const modal=$('#modal'),modalTitle=$('#modalTitle'),modalKicker=$('#modalKicker'),modalText=$('#modalText'),modalButton=$('#modalButton');
 
@@ -78,14 +78,33 @@
       {at:[1,3],role:'start',color:'blue',locked:false},{at:[5,4],role:'finish',color:'blue',locked:true}
     ]}
   ];
+  // Stage 11~30: authored branching routes. A shared trunk fans out through T junctions to 3–4 finishes.
+  const copyStage=stage=>JSON.parse(JSON.stringify(stage));
   const baseCampaign=STAGES.slice();
-  const campaignOrder=[6,7,8,9,5,7,8,9,9,9,8,9,9,8,6,9,7,8,9,6];
-  campaignOrder.forEach(source=>STAGES.push(JSON.parse(JSON.stringify(baseCampaign[source]))));
+  const makeCombStage=(rows,cols,finishCount,color,filterCount=0)=>{
+    const spineRow=Math.floor(rows*.58),columns=Array.from({length:finishCount},(_,order)=>Math.max(1,Math.min(cols-1,Math.round((order+1)*(cols-1)/(finishCount+1))))),start=[rows-1,0];
+    const trunk=Array.from({length:rows-spineRow},(_,offset)=>[rows-1-offset,0]);
+    const paths=columns.map(column=>{const spine=Array.from({length:column},(_,offset)=>[spineRow,offset+1]),branch=Array.from({length:spineRow},(_,offset)=>[spineRow-1-offset,column]);return {color,points:[...trunk,...spine,...branch]};});
+    const specials=columns.slice(0,-1).map(column=>({at:[spineRow,column],type:'tee'}));
+    const filterCandidates=columns.map(column=>[Math.max(1,spineRow-1),column]);
+    for(let index=0;index<Math.min(filterCount,filterCandidates.length);index++)specials.push({at:filterCandidates[index],type:'filter',color});
+    return {rows,cols,paths,specials,endpoints:[{at:start,role:'start',color,locked:rows%2===0},...columns.map(column=>({at:[0,column],role:'finish',color,locked:column%2===0}))]};
+  };
+  const branchCampaign=[
+    makeCombStage(6,6,3,'green',1), makeCombStage(6,7,3,'blue',1), copyStage(baseCampaign[9]),
+    makeCombStage(7,7,4,'green',2), copyStage(baseCampaign[8]), makeCombStage(7,8,4,'blue',2),
+    copyStage(baseCampaign[9]), makeCombStage(8,8,4,'green',2), copyStage(baseCampaign[9]),
+    makeCombStage(8,9,4,'blue',3), makeCombStage(9,9,4,'green',3), copyStage(baseCampaign[9]),
+    makeCombStage(9,10,4,'blue',3), copyStage(baseCampaign[8]), makeCombStage(10,10,4,'green',3),
+    copyStage(baseCampaign[9]), makeCombStage(10,11,4,'blue',3), copyStage(baseCampaign[8]),
+    makeCombStage(11,11,4,'green',3), makeCombStage(11,12,4,'blue',3)
+  ];
+  branchCampaign.forEach(stage=>STAGES.push(stage));
   const TEST_STAGE_COUNT=STAGES.length;
   // Keep stage order fixed during testing; only the layout inside each stage is randomized.
   const TEST_RANDOM_MODE=false;
   // Set false later to use each original stage layout as a fixed production puzzle.
-  const TEST_LAYOUT_VARIANTS=true;
+  const TEST_LAYOUT_VARIANTS=false;
   const LAYOUT_VARIANTS=['identity','mirror-x','mirror-y','rotate-180'];
   const STAGE_TEMPLATES=STAGES.map(definition=>[definition]);
 
@@ -181,6 +200,7 @@
   function loadProgress(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));if(saved&&Number.isInteger(saved.unlocked)&&saved.results)return {...initialProgress(),...saved};}catch(error){}return initialProgress();}
   function saveProgress(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(progress));}catch(error){}}
   let progress=loadProgress();progress.unlocked=Math.min(TEST_STAGE_COUNT,Math.max(1,progress.unlocked));progress.current=Math.min(progress.unlocked-1,Math.max(0,progress.current));
+let adminMode=false;
   let game,timerId,startTimeout;
   const key=(index,direction)=>`${index}:${direction}`;
   const pointKey=([row,column])=>`${row},${column}`;
@@ -287,6 +307,9 @@
     return 0;
   }
   function buildStage(index,variant='identity',templateIndex=0){
+    // 랭킹 공정성을 위해 같은 스테이지는 항상 같은 초기 타일 상태를 사용합니다.
+    let seed=((index+1)*2654435761+templateIndex*1013904223+variant.length*374761393)>>>0;
+    const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
     const definition=transformedStage(STAGE_TEMPLATES[index][templateIndex],variant),edgeMap=new Map(),specialMap=new Map((definition.specials||[]).map(item=>[pointKey(item.at),item]));
     definition.paths.forEach(({points})=>{
       for(let step=0;step<points.length-1;step++){
@@ -298,7 +321,7 @@
     const endpointMap=new Map(definition.endpoints.map(item=>[pointKey(item.at),item]));
     const tiles=Array.from({length:definition.rows*definition.cols},(_,index)=>{
       const row=Math.floor(index/definition.cols),column=index%definition.cols,point=pointKey([row,column]);
-      const endpoint=endpointMap.get(point),special=specialMap.get(point),directions=edgeMap.get(point)||[];
+      const endpoint=endpointMap.get(point),special=specialMap.get(point),directions=[...new Set(edgeMap.get(point)||[])];
       if(endpoint){
         const target=directions[0];return {type:'endpoint',role:endpoint.role,color:endpoint.color,locked:endpoint.locked,target,rotation:target,required:true,touched:false};
       }
@@ -307,18 +330,18 @@
         const type=same(directions,[UP,DOWN])||same(directions,[LEFT,RIGHT])?'straight':'corner';
         const target=targetFor(type,directions);return {type,target,rotation:target,required:true,touched:false};
       }
-      const type=Math.random()<.5?'straight':'corner',rotation=Math.floor(Math.random()*(type==='straight'?2:4));
+      const type=random()<.5?'straight':'corner',rotation=Math.floor(random()*(type==='straight'?2:4));
       return {type,target:rotation,rotation,required:false,touched:false};
     });
     const stage={index,variant,templateIndex,rows:definition.rows,cols:definition.cols,tiles,moves:0,locked:true,animating:false,hasPlayerMoved:false};
     tiles.forEach(tile=>{
       if(tile.type==='cross')return;
       if(tile.type==='endpoint'){
-        if(!tile.locked)tile.rotation=(tile.target+1+Math.floor(Math.random()*3))%4;
+        if(!tile.locked)tile.rotation=(tile.target+1+Math.floor(random()*3))%4;
         return;
       }
       const span=tile.type==='straight'||tile.type==='filter'?2:4;
-      if(tile.required)tile.rotation=(tile.target+1+Math.floor(Math.random()*(span-1)))%span;
+      if(tile.required)tile.rotation=(tile.target+1+Math.floor(random()*(span-1)))%span;
     });
     tiles.forEach(tile=>{tile.origin=tile.rotation;});
     stage.perfectMoves=tiles.filter(tile=>tile.required&&tile.type!=='endpoint'&&tile.type!=='cross'&&tile.origin!==tile.target).length;
@@ -345,6 +368,7 @@
     return stage.moves+requiredNewMoves>stage.maxMoves;
   }
   function chooseLayout(index){
+    if(!TEST_LAYOUT_VARIANTS)return {templateIndex:0,variant:'identity',key:'0:identity'};
     // Stage 1은 새 색상 필터 규칙을 확실히 체험하도록 전용 튜토리얼 배치를 사용합니다.
     if(index===0){
       const layouts=LAYOUT_VARIANTS.map(variant=>({templateIndex:0,variant,key:`0:${variant}`}));
@@ -488,7 +512,7 @@
 
   function showGame(){homeScreen.classList.remove('show');gameScreen.classList.remove('hidden');}
   function showHome(){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');startOverlay.classList.remove('show');resetModal.classList.remove('show');gameScreen.classList.add('hidden');homeScreen.classList.add('show');renderHome();requestAnimationFrame(()=>{const focus=homeStageList.querySelector('.current')||homeStageList.lastElementChild;if(focus)focus.scrollIntoView({block:'center'});});}
-  function renderHome(){homeStageList.innerHTML='';for(let index=0;index<TEST_STAGE_COUNT;index++){const result=progress.results[index];const status=result==='Perfect'?'perfect':result?'clear':index===progress.current?'current':'locked';const button=document.createElement('button');button.type='button';button.className=`home-stage ${status}`;button.disabled=status==='locked';const number=pad(index+1);button.innerHTML=`<span>STAGE ${number}</span>${status==='perfect'?'<strong>PERFECT CLEAR!</strong>':status==='clear'?'<strong>CLEAR!</strong>':''}`;if(status==='perfect')button.addEventListener('click',()=>begin(index,{viewer:true}));else if(status==='clear'||status==='current')button.addEventListener('click',()=>begin(index));homeStageList.append(button);}}
+  function renderHome(){adminModeButton.textContent=adminMode?'BACK':'ADMIN';homeStageList.innerHTML='';for(let index=0;index<TEST_STAGE_COUNT;index++){const result=progress.results[index];const status=adminMode?'current':result==='Perfect'?'perfect':result?'clear':index===progress.current?'current':'locked';const button=document.createElement('button');button.type='button';button.className=`home-stage ${status}`;button.disabled=status==='locked';const number=pad(index+1);button.innerHTML=`<span>STAGE ${number}</span>${status==='perfect'?'<strong>PERFECT CLEAR!</strong>':status==='clear'?'<strong>CLEAR!</strong>':''}`;if(status==='perfect')button.addEventListener('click',()=>begin(index,{viewer:true}));else if(status==='clear'||status==='current')button.addEventListener('click',()=>begin(index));homeStageList.append(button);}}
   function begin(index,{viewer=false}={}){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');showGame();game=createStage(index,viewer?progress.solutions[index]:null);game.viewer=viewer;if(viewer){game.tiles.forEach(tile=>{tile.rotation=tile.target;tile.displayAngle=undefined;});game.hasPlayerMoved=true;game.locked=true;render();return;}if(!progress.results[index])progress.current=index;saveProgress();startOverlay.innerHTML='<span>PERFECT MOVES</span><strong>'+pad(game.perfectMoves)+'</strong>';render();startOverlay.classList.remove('show');void startOverlay.offsetWidth;startOverlay.classList.add('show');startTimeout=setTimeout(()=>{startOverlay.classList.remove('show');game.locked=false;render();},1000);}
   function clearGrade(){return game.moves<=game.perfectMoves?'Perfect':'Clear';}
   function clearStage(){game.locked=true;game.grade=clearGrade();progress.solutions[game.index]={templateIndex:game.templateIndex,variant:game.variant};progress.results[game.index]=game.grade==='Perfect'?'Perfect':(progress.results[game.index]||'Clear');if(game.grade==='Perfect')progress.results[game.index]='Perfect';progress.unlocked=Math.min(TEST_STAGE_COUNT,Math.max(progress.unlocked,game.index+2));progress.current=Math.min(TEST_STAGE_COUNT-1,game.index+1);saveProgress();clearInterval(timerId);render();[...board.children].forEach(tile=>tile.classList.add('clear-pop'));setTimeout(()=>showModal(true),420);}
@@ -501,6 +525,7 @@
     modalButton.onclick=()=>cleared&&game.index===TEST_STAGE_COUNT-1?showHome():begin(cleared?nextIndex:game.index);modal.classList.add('show');
   }
   homeButton.addEventListener('click',showHome);
+  adminModeButton.addEventListener('click',()=>{adminMode=!adminMode;renderHome();});
   resetProgressButton.addEventListener('click',()=>resetModal.classList.add('show'));
   resetNoButton.addEventListener('click',()=>resetModal.classList.remove('show'));
   resetYesButton.addEventListener('click',()=>{progress=initialProgress();try{localStorage.removeItem(STORAGE_KEY);}catch(error){}saveProgress();resetModal.classList.remove('show');renderHome();});
