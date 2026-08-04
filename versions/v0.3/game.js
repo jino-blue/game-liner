@@ -473,6 +473,23 @@
     {at:[5,0],role:'start',color:'red'},{at:[3,2],role:'finish',color:'red'},{at:[5,7],role:'finish',color:'red'},{at:[7,6],role:'finish',color:'red'}
   ]});
 
+  // Re-orient a square network while preserving all solved port relationships.
+  const orientSquareNetwork=(definition,turns=0,colorOrder=['green','blue','red'])=>{
+    const size=definition.rows-1;
+    const mapPoint=([row,column])=>{
+      let nextRow=row,nextColumn=column;
+      for(let turn=0;turn<turns;turn++)[nextRow,nextColumn]=[nextColumn,size-nextRow];
+      return [nextRow,nextColumn];
+    };
+    const mapColor=color=>colorOrder[['green','blue','red'].indexOf(color)]||color;
+    return {
+      ...definition,
+      paths:definition.paths.map(path=>({...path,color:mapColor(path.color),points:path.points.map(mapPoint)})),
+      specials:definition.specials.map(special=>({...special,at:mapPoint(special.at)})),
+      endpoints:definition.endpoints.map(endpoint=>({...endpoint,color:mapColor(endpoint.color),at:mapPoint(endpoint.at)}))
+    };
+  };
+
   const branchCampaign=[
     // Every stage uses a distinct topology; color changes alone are never used as a new puzzle.
     makeSmallT('green'), makePTurn('blue'), makeCrossFork('green','blue'), makeInteriorFork('green','blue','red'),
@@ -681,10 +698,11 @@
   rebuiltCampaign[21]=makeCrossSpoke('red','blue','green');
   rebuiltCampaign[22]=makeTriLadder('blue','red','green');
   rebuiltCampaign[23]=makeOffsetDual('green','red','blue');
-  rebuiltCampaign[24]=makeInterwoven25();
-  rebuiltCampaign[25]=makeReference26();
-  rebuiltCampaign[26]=makePortComplete27();
-  rebuiltCampaign[27]=makeDispersed28();
+  // Late campaign: every colour spans the board; no colour-specific corner cluster.
+  rebuiltCampaign[24]=orientSquareNetwork(makeDispersed30(),1,['blue','red','green']);
+  rebuiltCampaign[25]=orientSquareNetwork(makeDispersed30(),2,['red','green','blue']);
+  rebuiltCampaign[26]=orientSquareNetwork(makeDispersed30(),3,['green','red','blue']);
+  rebuiltCampaign[27]=orientSquareNetwork(makeDispersed30(),0,['blue','green','red']);
   rebuiltCampaign[28]=makeDispersed29();
   rebuiltCampaign[29]=makeDispersed30();
   STAGES.splice(0,STAGES.length,...rebuiltCampaign);
