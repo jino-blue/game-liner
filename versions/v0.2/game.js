@@ -310,12 +310,27 @@ let adminMode=false;
     const colorsByTile=Array.from({length:stage.tiles.length},()=>new Set());
     Object.entries(visualStates).forEach(([color,portsSet])=>portsSet.forEach(state=>colorsByTile[Number(state.split(':')[0])].add(color)));
     // 시작 직후에는 끝점만 색상을 유지해, 미조작 블록이 Move를 쓴 것처럼 보이지 않게 합니다.
-    if(!stage.hasPlayerMoved)colorsByTile.forEach(colors=>colors.clear());
     stage.tiles.forEach((tile,index)=>{if(tile.type==='endpoint')colorsByTile[index].add(tile.color);});
     return {states,visualStates,colorsByTile};
   }
   function isComplete(stage,connections){
     return stage.tiles.every((tile,index)=>tile.type!=='endpoint'||tile.role!=='finish'||connections.states[tile.color].has(key(index,tile.rotation)));
+  }
+  function colorIsComplete(stage,connections,color){
+    return stage.tiles.every((tile,index)=>tile.type!=='endpoint'||tile.role!=='finish'||tile.color!==color||connections.states[color].has(key(index,tile.rotation)));
+  }
+  function updateCompletedColors(stage,connections){
+    const pulse=[];
+    PATH_COLORS.forEach(color=>{
+      if(stage.completedColors.has(color)||!colorIsComplete(stage,connections,color))return;
+      stage.completedColors.add(color);
+      connections.states[color].forEach(state=>{
+        const index=Number(state.split(':')[0]),tile=stage.tiles[index];
+        if(tile.type!=='endpoint')tile.completedColor=color;
+        pulse.push(index);
+      });
+    });
+    return pulse;
   }
 
   function transformPoint([row,column],definition,variant){
@@ -349,7 +364,7 @@ let adminMode=false;
     // 랭킹 공정성을 위해 같은 스테이지는 항상 같은 초기 타일 상태를 사용합니다.
     let seed=((index+1)*2654435761+templateIndex*1013904223+variant.length*374761393)>>>0;
     const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
-    const definition=transformedStage(STAGE_TEMPLATES[index][templateIndex],variant),edgeMap=new Map(),specialMap=new Map((definition.specials||[]).map(item=>[pointKey(item.at),item])),preAligned=new Set((definition.preAligned||[]).map(pointKey));
+    const definition=transformedStage(STAGE_TEMPLATES[index][templateIndex],variant),edgeMap=new Map(),specialMap=new Map((definition.specials||[]).filter(item=>item.type!=='filter').map(item=>[pointKey(item.at),item])),preAligned=new Set((definition.preAligned||[]).map(pointKey));
     definition.paths.forEach(({points})=>{
       for(let step=0;step<points.length-1;step++){
         const first=pointKey(points[step]),second=pointKey(points[step+1]);
@@ -362,9 +377,9 @@ let adminMode=false;
       const row=Math.floor(index/definition.cols),column=index%definition.cols,point=pointKey([row,column]);
       const endpoint=endpointMap.get(point),special=specialMap.get(point),directions=[...new Set(edgeMap.get(point)||[])];
       if(endpoint){
-        const target=directions[0];return {type:'endpoint',role:endpoint.role,color:endpoint.color,locked:endpoint.locked,target,rotation:target,required:true,touched:false};
+        const target=directions[0];return {type:'endpoint',role:endpoint.role,color:endpoint.color,locked:false,target,rotation:target,required:true,touched:false};
       }
-      if(special){const target=special.type==='cross'?0:special.type==='tee'?targetFor('tee',directions):special.type==='filter'?targetFor('filter',directions):dualTargetFor(definition,special.at);return {type:special.type,target,rotation:target,required:true,touched:false,claimedColor:null,filterColor:special.color};}
+      if(special){const target=special.type==='cross'?0:special.type==='tee'?targetFor('tee',directions):special.type==='filter'?targetFor('filter',directions):dualTargetFor(definition,special.at);return {type:special.type,target,rotation:target,required:true,touched:special.type==='cross',claimedColor:null,filterColor:special.color};}
       if(directions.length===2){
         const type=same(directions,[UP,DOWN])||same(directions,[LEFT,RIGHT])?'straight':'corner';
         const target=targetFor(type,directions);return {type,target,rotation:target,required:true,touched:false};
@@ -372,12 +387,12 @@ let adminMode=false;
       const type=random()<.5?'straight':'corner',rotation=Math.floor(random()*(type==='straight'?2:4));
       return {type,target:rotation,rotation,required:false,touched:false};
     });
-    tiles.forEach((tile,index)=>{const row=Math.floor(index/definition.cols),column=index%definition.cols;tile.preAligned=preAligned.has(pointKey([row,column]));});
-    const stage={index,variant,templateIndex,rows:definition.rows,cols:definition.cols,tiles,moves:0,locked:true,animating:false,hasPlayerMoved:false};
+    tiles.forEach((tile,index)=>{const row=Math.floor(index/definition.cols),column=index%definition.cols;const adjacentStart=DELTAS.some(([rowDelta,columnDelta])=>{const endpoint=endpointMap.get(pointKey([row+rowDelta,column+columnDelta]));return endpoint&&endpoint.role==='start';});tile.preAligned=preAligned.has(pointKey([row,column]))||(tile.type!=='endpoint'&&adjacentStart);});
+    const stage={index,variant,templateIndex,rows:definition.rows,cols:definition.cols,tiles,moves:0,locked:true,animating:false,hasPlayerMoved:false,completedColors:new Set()};
     tiles.forEach(tile=>{
       if(tile.type==='cross')return;
       if(tile.type==='endpoint'){
-        if(!tile.locked)tile.rotation=(tile.target+1+Math.floor(random()*3))%4;
+        tile.rotation=tile.role==='start'?tile.target:(tile.target+1+Math.floor(random()*3))%4;
         return;
       }
       const span=tile.type==='straight'||tile.type==='filter'?2:4;
@@ -390,17 +405,15 @@ let adminMode=false;
     const movableCount=tiles.filter(tile=>tile.type!=='endpoint'&&tile.type!=='cross').length;
     // Perfect를 기준으로 한 번의 여유만 등급마다 주고, +3회부터는 실패가 됩니다.
     // 작은 보드에서도 모든 조작 가능 블록을 다 만지기 전에 실패하도록 상한을 둡니다.
-    stage.maxMoves=Math.min(stage.perfectMoves+3,movableCount-1,14);
-    stage.greatMoves=Math.min(stage.perfectMoves+1,stage.maxMoves);
-    stage.goodMoves=Math.min(stage.perfectMoves+2,stage.maxMoves);
+    stage.maxMoves=Math.min(stage.perfectMoves+4,movableCount-1,16);
+    stage.greatMoves=Math.min(stage.perfectMoves+(index<3?2:1),stage.maxMoves-2);
+    stage.goodMoves=stage.maxMoves-1;
     if(stage.maxMoves<=stage.perfectMoves)throw new Error('Perfect 이후의 여유 Move를 만들 수 없습니다.');
     return stage;
   }
   // 아직 건드리지 않은 필수 타일 중 정답 방향과 다른 타일만 추가 Move가 필요합니다.
   // 2차선이 두 색으로 잠긴 경우에는 다른 길을 풀어 복구할 수 있으므로 이 판정만으로 실패시키지 않습니다.
   function hasNoRouteWithinMoves(stage){
-    const lockedWrongDual=stage.tiles.some((tile,index)=>tile.type==='dual'&&tile.rotation!==tile.target&&stage.connections.colorsByTile[index].size>1);
-    if(lockedWrongDual)return false;
     const requiredNewMoves=stage.tiles.reduce((count,tile)=>{
       if(!tile.required||tile.type==='endpoint'||tile.type==='cross'||tile.rotation===tile.target||tile.touched)return count;
       return count+1;
@@ -450,13 +463,13 @@ let adminMode=false;
     else if(tile.type==='cross')path='<path class="road-path" d="M50 -1V101M-1 50H101"/>';
     else if(tile.type==='dual')path='<path class="road-path" d="M50 -1C50 25 75 50 101 50M-1 50C25 50 50 75 50 101"/>';
     // 시작/끝: 도로 위에 50% 크기의 흰색 사각 패널을 올리는 레이어 구조입니다.
-    else path='<path class="road-path endpoint-path" d="M50 50H101"/><rect class="endpoint-core" x="25" y="25" width="50" height="50" rx="20"/>';
+    else path='<path class="road-path endpoint-path" d="M50 50H101"/>'+'<rect class="endpoint-core" x="25" y="25" width="50" height="50" rx="20"/>';
     return `<svg class="road-svg" viewBox="0 0 100 100" aria-hidden="true"><g class="road-shape" style="transform:rotate(${displayAngle(tile)}deg)">${path}</g></svg>`;
   }
   function dualLaneColors(tile,index,connections){
     const lanes=[rotate([UP,RIGHT],tile.rotation),rotate([LEFT,DOWN],tile.rotation)];
     return lanes.map(lane=>{
-      const colors=PATH_COLORS.filter(color=>lane.some(direction=>connections.visualStates[color].has(key(index,direction))));
+      const colors=PATH_COLORS.filter(color=>lane.some(direction=>connections.states[color].has(key(index,direction))));
       return colors[0]||null;
     });
   }
@@ -465,10 +478,10 @@ let adminMode=false;
   }
   function visualClass(tile,colors){
     if(tile.type==='endpoint')return `color-${tile.color}`;
-    if(!colors.size)return tile.touched?'touched':'idle';
-    // Different colors meeting on a normal road are an invalid start/end connection, not an active route.
-    if(colors.size>1&&tile.type!=='cross'&&tile.type!=='dual')return 'touched';
-    if((tile.type==='cross'||tile.type==='dual')&&colors.size>1)return tile.type==='dual'?'dual-mixed':'color-mixed';
+    if(tile.type==='cross')return 'touched';
+    if(!colors.size)return tile.touched?'touched':tile.completedColor?`color-${tile.completedColor}`:'idle';
+    if(colors.size>1&&tile.type!=='dual')return 'touched';
+    if(tile.type==='dual'&&colors.size>1)return 'dual-mixed';
     return `color-${[...colors][0]}`;
   }
   function render(){
@@ -483,12 +496,10 @@ let adminMode=false;
     game.tiles.forEach((tile,index)=>{
       const colors=game.connections.colorsByTile[index],button=document.createElement('button');
       const classes=['tile',tile.type,visualClass(tile,colors)];
-      const dualLocked=tile.type==='dual'&&colors.size>1;
       if(tile.type==='endpoint')classes.push('endpoint');
       if(tile.type==='endpoint'&&tile.locked)classes.push('endpoint-locked');
-      if(dualLocked)classes.push('lane-locked');
-      if(!tile.locked&&tile.type!=='cross'&&!dualLocked)classes.push('rotatable');
-      button.className=classes.join(' ');button.style.setProperty('--order',index);if(tile.type==='filter')button.style.setProperty('--filter-color',COLORS[tile.filterColor]);button.disabled=game.locked||tile.type==='cross';
+      if(tile.type!=='cross')classes.push('rotatable');
+      button.className=classes.join(' ');button.style.setProperty('--order',index);button.style.setProperty('--endpoint-color',COLORS[tile.color]||COLORS.green);button.disabled=game.locked||tile.type==='cross';
       if(tile.type==='dual'&&colors.size>1){
         const [laneZero,laneOne]=dualLaneColors(tile,index,game.connections);
         // lane 0의 실제 통과 방향(예: 위→오른쪽)에 맞춰 대각 분할도 함께 회전합니다.
@@ -497,33 +508,17 @@ let adminMode=false;
         button.style.setProperty('--dual-gradient-direction',dualGradientDirection(tile.rotation));
       }
       button.setAttribute('role','gridcell');button.setAttribute('aria-label',tile.type==='endpoint'?(tile.locked?'잠긴 ':'회전 가능한 ')+(tile.role==='start'?'시작점':'도착점'):tile.type==='tee'?'T교차로':tile.type==='dual'?'2차선':tile.type==='filter'?(tile.filterColor==='green'?'초록 필터':'파랑 필터'):'회전 타일');
-      button.innerHTML=roadSvg(tile);
-      if(tile.type==='endpoint'&&tile.locked){
-        const lock=document.createElement('span');
-        lock.className='endpoint-lock';lock.setAttribute('aria-hidden','true');
-        // PNG는 마스크로 사용해 초록/파랑 타일 모두 해당 타일의 BG 색으로 표현합니다.
-        lock.style.setProperty('--lock-color',COLORS[tile.color]);button.append(lock);
-      }
-      if(!button.disabled)button.addEventListener('click',()=>{
-        if((tile.type==='endpoint'&&tile.locked)||dualLocked)lockedJiggle(index);
-        else turn(index);
-      });
+      button.innerHTML=roadSvg(tile);if(tile.type==='endpoint'&&tile.role==='start'){const symbol=document.createElement('span');symbol.className='start-symbol';symbol.textContent='S';symbol.setAttribute('aria-hidden','true');button.append(symbol);}
+      if(!button.disabled)button.addEventListener('click',()=>turn(index));
       board.append(button);
     });
     renderMoveStatus();
   }
-  function markerFor(){
-    // 퍼펙트 제한을 초과한 순간부터는 실패 한도인 Max Moves만 안내합니다.
-    return game.moves<=game.perfectMoves
-      ? {name:'PERFECT MOVES',type:'perfect',limit:game.perfectMoves}
-      : {name:'MAX MOVES',type:'max',limit:game.maxMoves};
-  }
   function renderMoveStatus(){
-    const marker=markerFor();
-    moveCard.dataset.grade=marker.type;
-    moveGradeLabel.textContent=marker.name;
-    moveUsed.textContent=pad(game.moves);
-    moveTarget.textContent=pad(marker.limit);
+    moveCard.dataset.grade='left';
+    moveGradeLabel.textContent='LEFT MOVES';
+    moveUsed.textContent=pad(Math.max(0,game.maxMoves-game.moves));
+    moveTarget.textContent=pad(game.maxMoves);
   }
   function lockedJiggle(index){
     if(game.locked)return;const element=board.children[index];element.classList.remove('locked-jiggle');void element.offsetWidth;element.classList.add('locked-jiggle');
@@ -531,9 +526,8 @@ let adminMode=false;
   function turn(index){
     if(game.locked||game.animating)return;
     const tile=game.tiles[index],isEndpoint=tile.type==='endpoint';
-    if(tile.type==='cross'||(isEndpoint&&tile.locked))return;
+    if(tile.type==='cross')return;
     const currentColors=game.connections.colorsByTile[index];
-    if(tile.type==='dual'&&currentColors.size>1){lockedJiggle(index);return;}
     if(!isEndpoint&&!tile.touched){if(game.moves>=game.maxMoves)return;tile.touched=true;game.moves++;}
     game.hasPlayerMoved=true;
     // 현재 화면각을 먼저 보존한 뒤 데이터 회전값을 바꿉니다.
@@ -544,9 +538,13 @@ let adminMode=false;
     game.animating=true;
     const element=board.children[index];element.querySelector('.road-shape').style.transform=`rotate(${tile.displayAngle}deg)`;
     setTimeout(()=>{
-      game.animating=false;render();
-      if(isComplete(game,game.connections))clearStage();
-      else if(game.moves>=game.maxMoves)over('exhausted');
+      game.animating=false;
+      game.connections=resolveConnections(game);
+      const completedTiles=updateCompletedColors(game,game.connections);
+      render();
+      completedTiles.forEach(tileIndex=>board.children[tileIndex]?.classList.add('route-complete-pop'));
+      if(game.moves>=game.maxMoves)over('exhausted');
+      else if(isComplete(game,game.connections))clearStage();
       else if(hasNoRouteWithinMoves(game))over('no-route');
     },245);
   }
@@ -561,12 +559,12 @@ let adminMode=false;
     else if(result==='Clear'||index===progress.current)begin(index);
   }
   function renderHome(){adminModeButton.textContent=adminMode?'BACK':'ADMIN';homeStageList.innerHTML='';for(let index=0;index<TEST_STAGE_COUNT;index++){const result=progress.results[index];const status=adminMode?'current':result==='Perfect'?'perfect':result?'clear':index===progress.current?'current':'locked';const button=document.createElement('button');button.type='button';button.className=`home-stage ${status}`;button.value=String(index);button.disabled=status==='locked';const number=pad(index+1);button.innerHTML=`<span>STAGE ${number}</span>${status==='perfect'?'<strong>PERFECT CLEAR!</strong>':status==='clear'?'<strong>CLEAR!</strong>':''}`;button.onclick=function(){openHomeStage(Number(this.value));};homeStageList.append(button);}}
-  function begin(index,{viewer=false}={}){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');const nextGame=createStage(index,viewer?progress.solutions[index]:null);game=nextGame;showGame();game.viewer=viewer;if(viewer){game.tiles.forEach(tile=>{tile.rotation=tile.target;tile.displayAngle=undefined;});game.hasPlayerMoved=true;game.locked=true;render();return;}if(!progress.results[index])progress.current=index;saveProgress();startOverlay.innerHTML='<span>PERFECT MOVES</span><strong>'+pad(game.perfectMoves)+'</strong>';render();startOverlay.classList.remove('show');void startOverlay.offsetWidth;startOverlay.classList.add('show');startTimeout=setTimeout(()=>{startOverlay.classList.remove('show');game.locked=false;render();},1000);}
-  function clearGrade(){return game.moves<=game.perfectMoves?'Perfect':'Clear';}
+  function begin(index,{viewer=false}={}){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');const nextGame=createStage(index,viewer?progress.solutions[index]:null);game=nextGame;showGame();game.viewer=viewer;if(viewer){game.tiles.forEach(tile=>{tile.rotation=tile.target;tile.displayAngle=undefined;});game.hasPlayerMoved=true;game.locked=true;render();return;}if(!progress.results[index])progress.current=index;saveProgress();startOverlay.innerHTML='<span>LEFT MOVES</span><strong>'+pad(game.maxMoves)+'</strong>';render();startOverlay.classList.remove('show');void startOverlay.offsetWidth;startOverlay.classList.add('show');startTimeout=setTimeout(()=>{startOverlay.classList.remove('show');game.locked=false;render();},1000);}
+  function clearGrade(){return game.moves<=game.perfectMoves?'Perfect':game.moves<=game.greatMoves?'Great':'Clear';}
   function clearStage(){game.locked=true;game.grade=clearGrade();progress.solutions[game.index]={templateIndex:game.templateIndex,variant:game.variant};progress.results[game.index]=game.grade==='Perfect'?'Perfect':(progress.results[game.index]||'Clear');if(game.grade==='Perfect')progress.results[game.index]='Perfect';progress.unlocked=Math.min(TEST_STAGE_COUNT,Math.max(progress.unlocked,game.index+2));progress.current=Math.min(TEST_STAGE_COUNT-1,game.index+1);saveProgress();clearInterval(timerId);render();[...board.children].forEach(tile=>tile.classList.add('clear-pop'));setTimeout(()=>showModal(true),420);}
   function over(reason){game.locked=true;clearInterval(timerId);showModal(false,reason);}
   function showModal(cleared,reason){
-    if(cleared){const labels={Perfect:'PERFECT!',Clear:'CLEAR!'};modalKicker.textContent=game.grade.toUpperCase();modalTitle.textContent=labels[game.grade];modalText.textContent=`${pad(game.moves)} Moves · Perfect ${pad(game.perfectMoves)} Moves`;}
+    if(cleared){const labels={Perfect:'PERFECT!',Great:'GREAT!',Clear:'CLEAR!'};modalKicker.textContent=game.grade.toUpperCase();modalTitle.textContent=labels[game.grade];modalText.textContent=`${pad(game.moves)} Moves · Perfect ${pad(game.perfectMoves)} Moves`;}
     else{modalKicker.textContent='TRY AGAIN';modalTitle.textContent='GAME OVER';modalText.textContent=reason==='no-route'?'남은 Move로 길을 완성할 수 없어요.':reason==='exhausted'?'Move limit reached.':'Try a different route.';}
     const nextIndex=Math.min(game.index+1,TEST_STAGE_COUNT-1);
     modalButton.textContent=cleared?(game.index===TEST_STAGE_COUNT-1?'HOME':'NEXT STAGE'):'RESTART';
