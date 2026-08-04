@@ -25,3 +25,8 @@
 @keyframes connection-enter{from{background:var(--from-bg)}to{background:var(--to-bg)}}
 @keyframes connection-release{from{background:var(--from-bg)}to{background:var(--to-bg)}}
 @keyframes locked-jiggle{0%,100%{transform:rotate(0)}34%{transform:rotate(7deg)}66%{transform:rotate(-3deg)}84%{transform:rotate(1deg)}}
+/* Candidate blocks dim out rather than snapping back when an endpoint rotation closes the route. */
+.tile.candidate-release{animation:candidate-release .30s cubic-bezier(.22,.7,.32,1) both}
+.tile.candidate-release .road-path{animation:candidate-road-release .30s ease both}
+@keyframes candidate-release{0%{background-color:var(--candidate-flash)}42%{background-color:var(--candidate)}100%{background-color:var(--candidate-release-to)}}
+@keyframes candidate-road-release{0%{stroke:#fff}100%{stroke:var(--idle-road)}}

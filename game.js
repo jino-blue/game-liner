@@ -111,10 +111,11 @@
     // seven-tile crossing route; no short straight-line filler is left behind.
     return {rows:6,cols:6,paths:[
       {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
+      {color:primary,points:[[1,3],[1,4],[0,4]]},
       {color:secondary,points:[[0,5],[1,5],[2,5],[3,5],[3,4],[3,3],[4,3],[5,3]]},
-      {color:tertiary,points:[[0,0],[0,1],[0,2],[1,2],[2,2],[2,3],[2,4]]}
-    ],specials:[{at:[3,3],type:'dual'},{at:[2,3],type:'cross'}],endpoints:[
-      {at:[5,0],role:'start',color:primary},{at:[0,3],role:'finish',color:primary},
+      {color:tertiary,points:[[0,0],[1,0],[2,0],[2,1],[1,1],[0,1],[0,2],[1,2],[2,2],[2,3],[2,4]]}
+    ],specials:[{at:[3,3],type:'dual'},{at:[2,3],type:'cross'},{at:[1,3],type:'tee'}],endpoints:[
+      {at:[5,0],role:'start',color:primary},{at:[0,3],role:'finish',color:primary},{at:[0,4],role:'finish',color:primary},
       {at:[0,5],role:'start',color:secondary},{at:[5,3],role:'finish',color:secondary},
       {at:[0,0],role:'start',color:tertiary},{at:[2,4],role:'finish',color:tertiary}
     ]};
@@ -141,8 +142,8 @@
     {at:[2,0],role:'start',color},{at:[0,0],role:'finish',color},{at:[0,2],role:'finish',color}
   ]});
   const makePTurn=color=>({rows:3,cols:3,paths:[
-    {color,points:[[1,0],[1,1],[0,1],[0,2],[1,2],[2,2]]}
-  ],endpoints:[{at:[1,0],role:'start',color},{at:[2,2],role:'finish',color}]});
+    {color,points:[[1,0],[1,1],[0,1],[0,2],[1,2],[1,1],[2,1]]}
+  ],specials:[{at:[1,1],type:'pturn'}],endpoints:[{at:[1,0],role:'start',color},{at:[2,1],role:'finish',color}]});
   const makeTwinT=(primary,secondary,tertiary)=>({rows:5,cols:6,paths:[
     {color:primary,points:[[4,0],[4,1],[3,1],[2,1],[1,1],[0,1]]},
     {color:primary,points:[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
@@ -193,13 +194,292 @@
     {at:[3,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
     {at:[0,2],role:'start',color:secondary},{at:[3,2],role:'finish',color:secondary}
   ]});
+  // Unique campaign variants: these are intentionally different route topologies,
+  // not recolors or mirrored copies of earlier stages.
+  const makeTriLadder=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[2,1],[1,1],[0,1]]},
+    {color:primary,points:[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
+    {color:primary,points:[[3,3],[3,4],[2,4],[1,4],[0,4]]},
+    {color:secondary,points:[[0,5],[1,5],[2,5],[3,5],[4,5],[5,5]]},
+    {color:tertiary,points:[[5,2],[4,2],[4,3],[4,4],[5,4]]}
+  ],specials:[{at:[3,1],type:'tee'},{at:[3,3],type:'tee'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},{at:[0,4],role:'finish',color:primary},
+    {at:[0,5],role:'start',color:secondary},{at:[5,5],role:'finish',color:secondary},
+    {at:[5,2],role:'start',color:tertiary},{at:[5,4],role:'finish',color:tertiary}
+  ]});
+  const makeOffsetDual=(primary,secondary,tertiary)=>({rows:5,cols:6,paths:[
+    {color:primary,points:[[4,0],[3,0],[3,1],[2,1],[2,2],[1,2],[0,2]]},
+    {color:secondary,points:[[0,5],[1,5],[2,5],[2,4],[2,3],[2,2],[3,2],[4,2]]},
+    {color:tertiary,points:[[0,0],[1,0],[1,1],[1,2],[1,3],[0,3]]}
+  ],specials:[{at:[2,2],type:'dual'},{at:[1,2],type:'cross'}],endpoints:[
+    {at:[4,0],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},
+    {at:[0,5],role:'start',color:secondary},{at:[4,2],role:'finish',color:secondary},
+    {at:[0,0],role:'start',color:tertiary},{at:[0,3],role:'finish',color:tertiary}
+  ]});
+  const makePTurnCross=(primary,secondary)=>({rows:5,cols:5,paths:[
+    {color:primary,points:[[4,0],[3,0],[3,1],[2,1],[2,2],[1,2],[1,1],[0,1]]},
+    {color:primary,points:[[1,2],[1,3],[0,3]]},
+    {color:secondary,points:[[2,4],[2,3],[2,2],[3,2],[4,2]]}
+  ],specials:[{at:[2,2],type:'pturn'},{at:[1,2],type:'tee'}],endpoints:[
+    {at:[4,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
+    {at:[2,4],role:'start',color:secondary},{at:[4,2],role:'finish',color:secondary}
+  ]});
+  const makeBossMesh=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[2,1],[1,1],[0,1]]},
+    {color:primary,points:[[2,1],[2,2],[2,3],[1,3],[0,3]]},
+    {color:secondary,points:[[0,2],[1,2],[2,2],[3,2],[4,2],[5,2]]},
+    {color:tertiary,points:[[0,5],[1,5],[2,5],[3,5],[3,4],[3,3],[3,2],[3,1],[3,0]]}
+  ],specials:[{at:[2,1],type:'tee'},{at:[2,2],type:'cross'},{at:[3,2],type:'cross'},{at:[3,1],type:'cross'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
+    {at:[0,2],role:'start',color:secondary},{at:[5,2],role:'finish',color:secondary},
+    {at:[0,5],role:'start',color:tertiary},{at:[3,0],role:'finish',color:tertiary}
+  ]});
+  const makeCrossSpoke=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[2,1],[1,1],[0,1]]},
+    {color:primary,points:[[2,1],[2,2],[2,3],[1,3],[0,3]]},
+    {color:secondary,points:[[0,2],[1,2],[2,2],[3,2],[4,2],[5,2]]},
+    {color:tertiary,points:[[5,5],[4,5],[4,4],[3,4],[3,5],[2,5],[1,5],[0,5]]}
+  ],specials:[{at:[2,1],type:'tee'},{at:[2,2],type:'cross'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
+    {at:[0,2],role:'start',color:secondary},{at:[5,2],role:'finish',color:secondary},
+    {at:[5,5],role:'start',color:tertiary},{at:[0,5],role:'finish',color:tertiary}
+  ]});
+  const makeSpiralT=(primary,secondary)=>({rows:5,cols:5,paths:[
+    {color:primary,points:[[4,0],[3,0],[2,0],[1,0],[1,1],[0,1]]},
+    {color:primary,points:[[1,1],[1,2],[2,2],[2,3],[1,3],[0,3]]},
+    {color:secondary,points:[[4,4],[3,4],[3,3],[3,2],[3,1],[4,1]]}
+  ],specials:[{at:[1,1],type:'tee'}],endpoints:[
+    {at:[4,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
+    {at:[4,4],role:'start',color:secondary},{at:[4,1],role:'finish',color:secondary}
+  ]});
+  const makeCenterFork=(primary,secondary)=>({rows:5,cols:5,paths:[
+    {color:primary,points:[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]]},
+    {color:primary,points:[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
+    {color:secondary,points:[[0,2],[1,2],[2,2],[3,2],[4,2]]}
+  ],specials:[{at:[3,1],type:'tee'},{at:[3,2],type:'cross'}],endpoints:[
+    {at:[4,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
+    {at:[0,2],role:'start',color:secondary},{at:[4,2],role:'finish',color:secondary}
+  ]});
+  const makeOffsetBranch=(primary,secondary,tertiary)=>({rows:6,cols:5,paths:[
+    {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[2,1],[1,1],[0,1]]},
+    {color:primary,points:[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
+    {color:secondary,points:[[5,4],[4,4],[3,4],[2,4],[1,4],[0,4]]},
+    {color:tertiary,points:[[5,2],[4,2],[3,2],[2,2],[1,2],[0,2]]}
+  ],specials:[{at:[3,1],type:'tee'},{at:[3,2],type:'cross'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
+    {at:[5,4],role:'start',color:secondary},{at:[0,4],role:'finish',color:secondary},
+    {at:[5,2],role:'start',color:tertiary},{at:[0,2],role:'finish',color:tertiary}
+  ]});
+  const makeMultiCross=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[2,1],[1,1],[0,1]]},
+    {color:primary,points:[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
+    {color:secondary,points:[[0,2],[1,2],[2,2],[3,2],[4,2],[5,2]]},
+    {color:tertiary,points:[[0,5],[1,5],[1,4],[2,4],[2,5],[3,5],[4,5],[5,5]]}
+  ],specials:[{at:[3,1],type:'tee'},{at:[3,2],type:'cross'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
+    {at:[0,2],role:'start',color:secondary},{at:[5,2],role:'finish',color:secondary},
+    {at:[0,5],role:'start',color:tertiary},{at:[5,5],role:'finish',color:tertiary}
+  ]});
+  const makeBossPTurn=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[2,1],[2,2],[1,2],[1,1],[0,1]]},
+    {color:secondary,points:[[2,5],[2,4],[2,3],[2,2],[3,2],[4,2],[5,2]]},
+    {color:tertiary,points:[[5,5],[4,5],[4,4],[3,4],[3,3],[4,3],[5,3]]}
+  ],specials:[{at:[2,2],type:'pturn'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},
+    {at:[2,5],role:'start',color:secondary},{at:[5,2],role:'finish',color:secondary},
+    {at:[5,5],role:'start',color:tertiary},{at:[5,3],role:'finish',color:tertiary}
+  ]});  // Advanced-only replacements: 6×6, three colors, and multiple route decisions.
+  const makeFinalCrown=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[4,1],[4,2],[3,2],[2,2],[1,2],[0,2]]},
+    {color:primary,points:[[4,2],[4,3],[4,4],[3,4],[2,4],[1,4],[0,4]]},
+    {color:primary,points:[[4,4],[4,5],[3,5],[2,5],[1,5],[0,5]]},
+    {color:secondary,points:[[0,3],[1,3],[2,3],[3,3],[4,3],[5,3]]},
+    {color:tertiary,points:[[0,0],[1,0],[2,0],[2,1],[1,1],[0,1]]}
+  ],specials:[{at:[4,2],type:'tee'},{at:[4,4],type:'tee'},{at:[4,3],type:'cross'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},{at:[0,4],role:'finish',color:primary},{at:[0,5],role:'finish',color:primary},
+    {at:[0,3],role:'start',color:secondary},{at:[5,3],role:'finish',color:secondary},
+    {at:[0,0],role:'start',color:tertiary},{at:[0,1],role:'finish',color:tertiary}
+  ]});
+  const makeFinalSwitchboard=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[2,0],[2,1],[2,2],[2,3],[1,3],[1,2],[0,2]]},
+    {color:primary,points:[[1,3],[1,4],[0,4]]},
+    {color:secondary,points:[[2,5],[2,4],[2,3],[3,3],[4,3],[5,3]]},
+    {color:tertiary,points:[[5,0],[4,0],[4,1],[4,2],[4,3],[4,4],[4,5]]}
+  ],specials:[{at:[2,3],type:'pturn'},{at:[1,3],type:'tee'},{at:[4,3],type:'cross'}],endpoints:[
+    {at:[2,0],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},{at:[0,4],role:'finish',color:primary},
+    {at:[2,5],role:'start',color:secondary},{at:[5,3],role:'finish',color:secondary},
+    {at:[5,0],role:'start',color:tertiary},{at:[4,5],role:'finish',color:tertiary}
+  ]});  const makeAdvancedPTurnCross=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[2,1],[2,2],[1,2],[1,1],[0,1]]},
+    {color:primary,points:[[1,2],[1,3],[0,3]]},
+    {color:secondary,points:[[2,5],[2,4],[2,3],[2,2],[3,2],[4,2],[5,2]]},
+    {color:tertiary,points:[[5,5],[4,5],[4,4],[3,4],[3,5]]}
+  ],specials:[{at:[2,2],type:'pturn'},{at:[1,2],type:'tee'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
+    {at:[2,5],role:'start',color:secondary},{at:[5,2],role:'finish',color:secondary},
+    {at:[5,5],role:'start',color:tertiary},{at:[3,5],role:'finish',color:tertiary}
+  ]});
+  const makeAdvancedSpiral=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[3,0],[2,0],[1,0],[1,1],[0,1]]},
+    {color:primary,points:[[1,1],[1,2],[2,2],[2,3],[1,3],[0,3]]},
+    {color:secondary,points:[[5,5],[4,5],[4,4],[4,3],[4,2],[4,1],[5,1]]},
+    {color:tertiary,points:[[0,5],[1,5],[1,4],[2,4],[3,4],[3,3]]}
+  ],specials:[{at:[1,1],type:'tee'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},
+    {at:[5,5],role:'start',color:secondary},{at:[5,1],role:'finish',color:secondary},
+    {at:[0,5],role:'start',color:tertiary},{at:[3,3],role:'finish',color:tertiary}
+  ]});  const makeAdvancedTrident=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]]},
+    {color:primary,points:[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
+    {color:primary,points:[[3,3],[3,4],[2,4],[1,4],[0,4]]},
+    {color:secondary,points:[[0,5],[1,5],[2,5],[3,5],[4,5],[5,5]]},
+    {color:tertiary,points:[[5,1],[4,1],[4,2],[5,2],[5,3],[4,3],[4,4],[5,4]]}
+  ],specials:[{at:[3,1],type:'tee'},{at:[3,3],type:'tee'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},{at:[0,4],role:'finish',color:primary},
+    {at:[0,5],role:'start',color:secondary},{at:[5,5],role:'finish',color:secondary},
+    {at:[5,1],role:'start',color:tertiary},{at:[5,4],role:'finish',color:tertiary}
+  ]});
+  const makeDualTower=(primary,secondary,tertiary)=>({rows:6,cols:6,paths:[
+    {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[3,2],[2,2],[1,2],[0,2]]},
+    {color:secondary,points:[[0,5],[1,5],[2,5],[3,5],[3,4],[3,3],[3,2],[4,2],[5,2]]},
+    {color:tertiary,points:[[0,0],[1,0],[1,1],[1,2],[1,3],[0,3]]}
+  ],specials:[{at:[3,2],type:'dual'},{at:[1,2],type:'cross'}],endpoints:[
+    {at:[5,0],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},
+    {at:[0,5],role:'start',color:secondary},{at:[5,2],role:'finish',color:secondary},
+    {at:[0,0],role:'start',color:tertiary},{at:[0,3],role:'finish',color:tertiary}
+  ]});  // Super-hard campaign core: every color branches from one start to three goals.
+  // The five placements use different board orientations and color routes so players
+  // must re-read the junction order instead of memorising a previous solution.
+  const makeSuperHard=(colors=['green','blue','red'],variant='identity')=>{
+    const [primary,secondary,tertiary]=colors;
+    const mapPoint=([row,column])=>{
+      if(variant==='mirror-x')return [row,5-column];
+      if(variant==='mirror-y')return [5-row,column];
+      if(variant==='rotate-180')return [5-row,5-column];
+      if(variant==='transpose')return [column,row];
+      return [row,column];
+    };
+    const remap=items=>items.map(item=>({...item,at:item.at?mapPoint(item.at):undefined,points:item.points?item.points.map(mapPoint):undefined}));
+    const definition={rows:6,cols:6,paths:[
+      {color:primary,points:[[5,0],[4,0],[3,0]]},
+      {color:primary,points:[[4,0],[4,1],[4,2],[5,2],[5,3],[5,4],[4,4]]},
+      {color:primary,points:[[5,4],[5,5]]},
+      {color:secondary,points:[[0,0],[1,0],[2,0]]},
+      {color:secondary,points:[[1,0],[1,1],[1,2],[0,2]]},
+      {color:secondary,points:[[1,2],[2,2]]},
+      {color:tertiary,points:[[0,5],[1,5],[2,5]]},
+      {color:tertiary,points:[[1,5],[1,4],[1,3],[2,3],[2,4]]},
+      {color:tertiary,points:[[2,3],[3,3]]}
+    ],specials:[
+      {at:[4,0],type:'tee'},{at:[5,4],type:'tee'},
+      {at:[1,0],type:'tee'},{at:[1,2],type:'tee'},
+      {at:[1,5],type:'tee'},{at:[2,3],type:'tee'},
+      {at:[4,1],type:'cross'},{at:[1,1],type:'cross'},{at:[1,4],type:'cross'},
+      {at:[4,2],type:'dual'},{at:[1,3],type:'dual'}
+    ],endpoints:[
+      {at:[5,0],role:'start',color:primary},{at:[3,0],role:'finish',color:primary},{at:[4,4],role:'finish',color:primary},{at:[5,5],role:'finish',color:primary},
+      {at:[0,0],role:'start',color:secondary},{at:[2,0],role:'finish',color:secondary},{at:[0,2],role:'finish',color:secondary},{at:[2,2],role:'finish',color:secondary},
+      {at:[0,5],role:'start',color:tertiary},{at:[2,5],role:'finish',color:tertiary},{at:[2,4],role:'finish',color:tertiary},{at:[3,3],role:'finish',color:tertiary}
+    ]};
+    return {...definition,paths:remap(definition.paths).map(({at,...path})=>path),specials:remap(definition.specials),endpoints:remap(definition.endpoints)};
+  };  // Stage 27 rebuild: every placed special is part of the solved route.
+  const makePortComplete27=()=>({rows:6,cols:6,paths:[
+    // Green crosses the centre horizontally and then branches across the right side.
+    {color:'green',points:[[2,0],[2,1],[2,2],[2,3],[2,4],[1,4]]},
+    {color:'green',points:[[2,4],[2,5],[1,5]]},
+    {color:'green',points:[[2,5],[3,5]]},
+    // Blue uses the same cross vertically before splitting into the lower board.
+    {color:'blue',points:[[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[5,3],[4,3]]},
+    {color:'blue',points:[[1,2],[1,1]]},
+    {color:'blue',points:[[5,3],[5,4]]},
+    // Red occupies a separate lower-left branch rather than surrounding the cross.
+    {color:'red',points:[[5,0],[4,0],[3,0]]},
+    {color:'red',points:[[4,0],[4,1],[3,1]]},
+    {color:'red',points:[[4,1],[5,1]]}
+  ],specials:[
+    {at:[2,4],type:'tee'},{at:[2,5],type:'tee'},
+    {at:[1,2],type:'tee'},{at:[5,3],type:'tee'},
+    {at:[4,0],type:'tee'},{at:[4,1],type:'tee'},
+    {at:[2,2],type:'cross'}
+  ],endpoints:[
+    {at:[2,0],role:'start',color:'green'},{at:[1,4],role:'finish',color:'green'},{at:[1,5],role:'finish',color:'green'},{at:[3,5],role:'finish',color:'green'},
+    {at:[0,2],role:'start',color:'blue'},{at:[1,1],role:'finish',color:'blue'},{at:[4,3],role:'finish',color:'blue'},{at:[5,4],role:'finish',color:'blue'},
+    {at:[5,0],role:'start',color:'red'},{at:[3,0],role:'finish',color:'red'},{at:[3,1],role:'finish',color:'red'},{at:[5,1],role:'finish',color:'red'}
+  ]});
+
+  // Stage 28: one shared cross, with each color branching into a separate board region.
+  const makeDispersed28=()=>({rows:8,cols:8,paths:[
+    {color:'green',points:[[3,0],[3,1],[3,2],[3,3],[3,4],[4,4],[5,4]]},
+    {color:'green',points:[[3,4],[3,5],[3,6],[3,7]]},
+    {color:'green',points:[[3,5],[4,5],[5,5]]},
+    {color:'blue',points:[[0,3],[1,3],[2,3],[3,3],[4,3],[4,2],[4,1]]},
+    {color:'blue',points:[[4,3],[5,3],[5,2],[5,1]]},
+    {color:'blue',points:[[5,3],[6,3],[7,3]]},
+    {color:'red',points:[[0,7],[1,7],[1,6],[0,6]]},
+    {color:'red',points:[[1,6],[1,5],[1,4],[0,4]]},
+    {color:'red',points:[[1,4],[2,4],[2,5],[2,6]]}
+  ],specials:[
+    {at:[3,3],type:'cross'},
+    {at:[3,4],type:'tee'},{at:[3,5],type:'tee'},
+    {at:[4,3],type:'tee'},{at:[5,3],type:'tee'},
+    {at:[1,6],type:'tee'},{at:[1,4],type:'tee'}
+  ],endpoints:[
+    {at:[3,0],role:'start',color:'green'},{at:[5,4],role:'finish',color:'green'},{at:[3,7],role:'finish',color:'green'},{at:[5,5],role:'finish',color:'green'},
+    {at:[0,3],role:'start',color:'blue'},{at:[4,1],role:'finish',color:'blue'},{at:[5,1],role:'finish',color:'blue'},{at:[7,3],role:'finish',color:'blue'},
+    {at:[0,7],role:'start',color:'red'},{at:[0,6],role:'finish',color:'red'},{at:[0,4],role:'finish',color:'red'},{at:[2,6],role:'finish',color:'red'}
+  ]});
+
+  // Stage 29: the centre dual carries green (up-right) and blue (left-down) lanes.
+  const makeDispersed29=()=>({rows:8,cols:8,paths:[
+    {color:'green',points:[[0,3],[1,3],[2,3],[3,3],[3,4],[3,5],[2,5],[1,5]]},
+    {color:'green',points:[[3,5],[3,6],[3,7]]},
+    {color:'green',points:[[3,6],[4,6],[5,6]]},
+    {color:'blue',points:[[3,0],[3,1],[3,2],[3,3],[4,3],[4,2],[4,1]]},
+    {color:'blue',points:[[4,3],[5,3],[5,2],[5,1]]},
+    {color:'blue',points:[[5,3],[5,4],[5,5]]},
+    {color:'red',points:[[7,7],[6,7],[6,6],[7,6]]},
+    {color:'red',points:[[6,6],[6,5],[7,5]]},
+    {color:'red',points:[[6,5],[6,4],[6,3]]}
+  ],specials:[
+    {at:[3,3],type:'dual'},
+    {at:[3,5],type:'tee'},{at:[3,6],type:'tee'},
+    {at:[4,3],type:'tee'},{at:[5,3],type:'tee'},
+    {at:[6,6],type:'tee'},{at:[6,5],type:'tee'}
+  ],endpoints:[
+    {at:[0,3],role:'start',color:'green'},{at:[1,5],role:'finish',color:'green'},{at:[3,7],role:'finish',color:'green'},{at:[5,6],role:'finish',color:'green'},
+    {at:[3,0],role:'start',color:'blue'},{at:[4,1],role:'finish',color:'blue'},{at:[5,1],role:'finish',color:'blue'},{at:[5,5],role:'finish',color:'blue'},
+    {at:[7,7],role:'start',color:'red'},{at:[7,6],role:'finish',color:'red'},{at:[7,5],role:'finish',color:'red'},{at:[6,3],role:'finish',color:'red'}
+  ]});
+
+  // Stage 30: two spaced crosses, each shared by different-colored axes.
+  const makeDispersed30=()=>({rows:8,cols:8,paths:[
+    {color:'green',points:[[2,0],[2,1],[2,2],[2,3],[2,4],[1,4],[0,4]]},
+    {color:'green',points:[[2,4],[2,5],[2,6],[2,7]]},
+    {color:'green',points:[[2,5],[3,5],[3,6],[4,6]]},
+    {color:'blue',points:[[0,3],[1,3],[2,3],[3,3],[4,3],[4,4],[4,5],[5,5],[6,5],[7,5]]},
+    {color:'blue',points:[[6,5],[6,4],[6,3],[6,2]]},
+    {color:'blue',points:[[6,4],[7,4]]},
+    {color:'red',points:[[5,0],[5,1],[5,2],[5,3],[5,4],[5,5],[5,6],[5,7]]},
+    {color:'red',points:[[5,2],[4,2],[3,2]]},
+    {color:'red',points:[[5,6],[6,6],[7,6]]}
+  ],specials:[
+    {at:[2,3],type:'cross'},{at:[5,5],type:'cross'},
+    {at:[2,4],type:'tee'},{at:[2,5],type:'tee'},
+    {at:[6,5],type:'tee'},{at:[6,4],type:'tee'},
+    {at:[5,2],type:'tee'},{at:[5,6],type:'tee'}
+  ],endpoints:[
+    {at:[2,0],role:'start',color:'green'},{at:[0,4],role:'finish',color:'green'},{at:[2,7],role:'finish',color:'green'},{at:[4,6],role:'finish',color:'green'},
+    {at:[0,3],role:'start',color:'blue'},{at:[7,5],role:'finish',color:'blue'},{at:[6,2],role:'finish',color:'blue'},{at:[7,4],role:'finish',color:'blue'},
+    {at:[5,0],role:'start',color:'red'},{at:[3,2],role:'finish',color:'red'},{at:[5,7],role:'finish',color:'red'},{at:[7,6],role:'finish',color:'red'}
+  ]});
+
   const branchCampaign=[
-    // 11~30 deliberately alternate compact forks, P turns, crossings, and three-color routes.
+    // Every stage uses a distinct topology; color changes alone are never used as a new puzzle.
     makeSmallT('green'), makePTurn('blue'), makeCrossFork('green','blue'), makeInteriorFork('green','blue','red'),
     makeTriHub('green','blue','red'), makeTriWeave('blue','red','green'), makeTriCross(['blue','green','red']), makeTriDual(['green','red','blue']),
-    makeInteriorFork('red','green','blue'), makeTwinT('blue','red','green'), makeTriBranch(['green','blue','red']), makeInteriorFork('blue','red','green'),
-    makePTurn('red'), makeTriWeave('green','blue','red'), makeTriDual(['blue','green','red']), makeTriCross(['green','red','blue']),
-    makeSmallT('blue'), makeInteriorFork('green','red','blue'), makeTriBranch(['blue','red','green']), makeTriWeave('red','green','blue')
+    makeTriLadder('red','green','blue'), makeTwinT('blue','red','green'), makeAdvancedTrident('green','blue','red'), makeDualTower('blue','red','green'),
+    makeAdvancedPTurnCross('red','blue','green'), makeBossMesh('green','blue','red'), makeCrossSpoke('blue','green','red'), makeSuperHard(['red','green','blue'],'identity'),
+    makePortComplete27(), makeDispersed28(), makeDispersed29(), makeDispersed30()
   ];
   branchCampaign.forEach(stage=>STAGES.push(stage));
   const TEST_STAGE_COUNT=STAGES.length;
@@ -295,6 +575,121 @@
       {at:[2,0],role:'start',color:'blue',locked:true},{at:[1,0],role:'finish',color:'blue',locked:true}
     ]}
   ];
+  // Stage 08: compact, single-colour network. Nearly the whole board participates.
+  const makeDenseSingle08=()=>({rows:4,cols:4,paths:[
+    {color:'red',points:[[0,3],[1,3],[1,2],[1,1],[0,1]]},
+    {color:'red',points:[[1,1],[2,1],[2,0],[3,0]]},
+    {color:'red',points:[[2,1],[2,2],[3,2],[3,3]]}
+  ],specials:[{at:[1,1],type:'tee'},{at:[2,1],type:'tee'}],endpoints:[
+    {at:[0,3],role:'start',color:'red'},
+    {at:[0,1],role:'finish',color:'red'},
+    {at:[3,0],role:'finish',color:'red'},
+    {at:[3,3],role:'finish',color:'red'}
+  ]});
+
+  // Stage 09: both lanes of the dual are required, and neither color can end as a short branch.
+  const makeInterwoven09=()=>({rows:6,cols:6,paths:[
+    {color:'green',points:[[0,3],[1,3],[2,3],[3,3],[3,4],[3,5],[2,5],[1,5]]},
+    {color:'green',points:[[3,5],[4,5],[4,4]]},
+    {color:'blue',points:[[3,0],[3,1],[3,2],[3,3],[4,3],[4,2],[4,1]]},
+    {color:'blue',points:[[4,3],[5,3],[5,2],[5,1]]},
+    {color:'blue',points:[[5,3],[5,4],[5,5]]}
+  ],specials:[
+    {at:[3,3],type:'dual'},
+    {at:[3,5],type:'tee'},{at:[4,3],type:'tee'},{at:[5,3],type:'tee'}
+  ],endpoints:[
+    {at:[0,3],role:'start',color:'green'},{at:[1,5],role:'finish',color:'green'},{at:[4,4],role:'finish',color:'green'},
+    {at:[3,0],role:'start',color:'blue'},{at:[4,1],role:'finish',color:'blue'},{at:[5,1],role:'finish',color:'blue'},{at:[5,5],role:'finish',color:'blue'}
+  ]});
+
+  // Stage 25: interwoven three-colour mesh. Green and blue occupy separate dual lanes.
+  const makeInterwoven25=()=>({rows:7,cols:7,paths:[
+    {color:'green',points:[[2,0],[2,1],[2,2],[2,3],[1,3],[0,3]]},
+    {color:'green',points:[[2,3],[2,4],[3,4],[4,4],[4,5],[3,5],[2,5]]},
+    {color:'green',points:[[4,5],[4,6]]},
+    {color:'blue',points:[[0,2],[1,2],[2,2],[3,2],[3,3]]},
+    {color:'blue',points:[[3,2],[4,2],[4,3],[4,4],[5,4],[5,3],[5,2]]},
+    {color:'blue',points:[[5,4],[5,5],[5,6]]},
+    {color:'red',points:[[6,0],[5,0],[4,0],[4,1],[3,1]]},
+    {color:'red',points:[[4,1],[5,1],[6,1]]},
+  ],specials:[
+    {at:[2,2],type:'cross'},
+    {at:[2,3],type:'tee'},{at:[4,5],type:'tee'},
+    {at:[3,2],type:'tee'},{at:[5,4],type:'tee'},
+    {at:[4,4],type:'dual'},
+    {at:[4,1],type:'tee'}
+  ],endpoints:[
+    {at:[2,0],role:'start',color:'green'},{at:[0,3],role:'finish',color:'green'},{at:[2,5],role:'finish',color:'green'},{at:[4,6],role:'finish',color:'green'},
+    {at:[0,2],role:'start',color:'blue'},{at:[3,3],role:'finish',color:'blue'},{at:[5,2],role:'finish',color:'blue'},{at:[5,6],role:'finish',color:'blue'},
+    {at:[6,0],role:'start',color:'red'},{at:[3,1],role:'finish',color:'red'},{at:[6,1],role:'finish',color:'red'}
+  ]});
+
+  // Stage 26 is a separate three-color network: no decorative cross or dual ports.
+  const makeReference26=()=>({rows:7,cols:7,paths:[
+    {color:'green',points:[[3,0],[3,1],[3,2],[3,3],[3,4],[2,4],[1,4]]},
+    {color:'green',points:[[3,4],[3,5],[3,6]]},
+    {color:'green',points:[[3,5],[4,5],[4,6],[5,6]]},
+    {color:'blue',points:[[0,3],[1,3],[2,3],[3,3],[4,3],[4,2],[4,1]]},
+    {color:'blue',points:[[4,3],[5,3],[5,2],[5,1]]},
+    {color:'blue',points:[[5,3],[5,4],[5,5]]},
+    {color:'red',points:[[0,0],[1,0],[1,1],[0,1]]},
+    {color:'red',points:[[1,1],[2,1],[2,0]]},
+    {color:'red',points:[[2,1],[2,2]]}
+  ],specials:[
+    {at:[3,3],type:'cross'},
+    {at:[3,4],type:'tee'},{at:[3,5],type:'tee'},
+    {at:[4,3],type:'tee'},{at:[5,3],type:'tee'},
+    {at:[1,1],type:'tee'},{at:[2,1],type:'tee'}
+  ],endpoints:[
+    {at:[3,0],role:'start',color:'green'},{at:[1,4],role:'finish',color:'green'},{at:[3,6],role:'finish',color:'green'},{at:[5,6],role:'finish',color:'green'},
+    {at:[0,3],role:'start',color:'blue'},{at:[4,1],role:'finish',color:'blue'},{at:[5,1],role:'finish',color:'blue'},{at:[5,5],role:'finish',color:'blue'},
+    {at:[0,0],role:'start',color:'red'},{at:[0,1],role:'finish',color:'red'},{at:[2,0],role:'finish',color:'red'},{at:[2,2],role:'finish',color:'red'}
+  ]});
+
+  // Reframe the earlier campaign so all stages have a fresh, fixed layout and no legacy filter tile.
+  const reframeStage=(definition,index)=>{
+    const flipX=index%3===0,flipY=index%3===1;
+    const mapPoint=([row,column])=>[flipY?definition.rows-1-row:row,flipX?definition.cols-1-column:column];
+    const colorSets=[['green','blue','red'],['blue','red','green'],['red','green','blue']];
+    const colors=colorSets[index%colorSets.length];
+    const mapColor=color=>colors[['green','blue','red'].indexOf(color)]||color;
+    return {
+      ...definition,
+      paths:definition.paths.map(path=>({...path,color:mapColor(path.color),points:path.points.map(mapPoint)})),
+      endpoints:definition.endpoints.map(endpoint=>({...endpoint,color:mapColor(endpoint.color),at:mapPoint(endpoint.at)})),
+      specials:(definition.specials||[]).filter(special=>special.type!=='filter').map(special=>({...special,color:special.color?mapColor(special.color):undefined,at:mapPoint(special.at)})),
+      preAligned:(definition.preAligned||[]).map(mapPoint)
+    };
+  };
+  const rebuiltCampaign=STAGES.map((definition,index)=>reframeStage(definition,index));
+  // From stage 11 onward, routes deliberately share junction decisions instead of
+  // resolving as isolated color branches. Difficulty grows by adding crossings,
+  // then dual lanes, then multi-colour meshes.
+  rebuiltCampaign[7]=makeDenseSingle08();
+  rebuiltCampaign[8]=makeInterwoven09();
+  rebuiltCampaign[10]=makeCrossFork('green','blue');
+  rebuiltCampaign[11]=makeInteriorFork('blue','green','red');
+  rebuiltCampaign[12]=makeTriHub('red','blue','green');
+  rebuiltCampaign[13]=makeTriWeave('green','red','blue');
+  rebuiltCampaign[14]=makeTriCross(['blue','green','red']);
+  rebuiltCampaign[15]=makeTriDual(['red','blue','green']);
+  rebuiltCampaign[16]=makeTwinT('green','blue','red');
+  rebuiltCampaign[17]=makeAdvancedTrident('blue','red','green');
+  rebuiltCampaign[18]=makeDualTower('red','green','blue');
+  rebuiltCampaign[19]=makeAdvancedPTurnCross('green','blue','red');
+  rebuiltCampaign[20]=makeBossMesh('blue','green','red');
+  rebuiltCampaign[21]=makeCrossSpoke('red','blue','green');
+  rebuiltCampaign[22]=makeTriLadder('blue','red','green');
+  rebuiltCampaign[23]=makeOffsetDual('green','red','blue');
+  rebuiltCampaign[24]=makeInterwoven25();
+  rebuiltCampaign[25]=makeReference26();
+  rebuiltCampaign[26]=makePortComplete27();
+  rebuiltCampaign[27]=makeDispersed28();
+  rebuiltCampaign[28]=makeDispersed29();
+  rebuiltCampaign[29]=makeDispersed30();
+  STAGES.splice(0,STAGES.length,...rebuiltCampaign);
+  STAGE_TEMPLATES.splice(0,STAGE_TEMPLATES.length,...STAGES.map(definition=>[definition]));
+
   const lastLayoutByStage=Array(STAGES.length).fill(null);
 
   const STORAGE_KEY='line-puzzle-campaign-v3';
@@ -328,6 +723,7 @@ let adminMode=false;
   function exits(tile,incoming,color,ignoreTClaim=false){
     if(tile.type==='endpoint')return [];
     if(tile.type==='cross')return [OPP[incoming]];
+    if(tile.type==='pturn'){const route={[LEFT]:UP,[UP]:LEFT,[RIGHT]:DOWN,[DOWN]:RIGHT};return [route[incoming]];}
     if(tile.type==='filter'&&tile.filterColor!==color)return [];
     if(tile.type==='dual'){
       const lanes=[rotate([UP,RIGHT],tile.rotation),rotate([LEFT,DOWN],tile.rotation)];
@@ -386,7 +782,49 @@ let adminMode=false;
   function colorIsComplete(stage,connections,color){
     return stage.tiles.every((tile,index)=>tile.type!=='endpoint'||tile.role!=='finish'||tile.color!==color||connections.startStates[color].has(key(index,tile.rotation)));
   }
-  function updateCompletedColors(stage,connections){
+  // Validates the *solved* graph, not just whether endpoints are connected.
+  // A special tile passes only when every one of its intended ports is reached
+  // from a start point in the actual solution.
+  function validateSpecialUsage(stage){
+    const snapshot=stage.tiles.map(tile=>({rotation:tile.rotation,touched:tile.touched,primed:tile.primed,claimedColor:tile.claimedColor,completedColor:tile.completedColor}));
+    stage.tiles.forEach(tile=>{
+      tile.rotation=tile.target;
+      if(tile.type!=='endpoint'&&tile.type!=='cross'&&tile.type!=='pturn')tile.touched=true;
+      tile.primed=true;
+    });
+    const connections=resolveConnections(stage),usedByTile=Array.from({length:stage.tiles.length},()=>new Set());
+    PATH_COLORS.forEach(color=>connections.startStates[color].forEach(state=>{
+      const [index,direction]=state.split(':').map(Number);
+      usedByTile[index].add(direction);
+    }));
+    const routeTileCounts=Object.fromEntries(PATH_COLORS.map(color=>[color,new Set([...connections.startStates[color]].map(state=>Number(state.split(':')[0]))).size]));
+    const shortRoutes=stage.index>=5?PATH_COLORS.filter(color=>routeTileCounts[color]>0&&routeTileCounts[color]<4):[];
+    const unusedRequired=[],specials=[];
+    stage.tiles.forEach((tile,index)=>{
+      if(tile.required&&tile.type!=='endpoint'&&!usedByTile[index].size)unusedRequired.push(index);
+      if(!['cross','dual','tee'].includes(tile.type))return;
+      const requiredPorts=tile.type==='tee'?ports(tile):[UP,RIGHT,DOWN,LEFT];
+      const usedPorts=[...usedByTile[index]].sort((a,b)=>a-b);
+      const missingPorts=requiredPorts.filter(direction=>!usedByTile[index].has(direction));
+      specials.push({index,type:tile.type,usedPorts,missingPorts,valid:!missingPorts.length});
+    });
+    const report={
+      endpointComplete:isComplete(stage,connections),
+      unusedRequired,
+      routeTileCounts,
+      shortRoutes,
+      specials,
+      valid:isComplete(stage,connections)&&!unusedRequired.length&&!shortRoutes.length&&specials.every(item=>item.valid)
+    };
+    stage.tiles.forEach((tile,index)=>Object.assign(tile,snapshot[index]));
+    return report;
+  }
+  function validateCampaign(){
+    return STAGES.map((_,index)=>{
+      const stage=buildStage(index);
+      return {stage:index+1,...validateSpecialUsage(stage)};
+    });
+  }  function updateCompletedColors(stage,connections){
     const pulse=[];
     PATH_COLORS.forEach(color=>{
       if(stage.completedColors.has(color)&&!colorIsComplete(stage,connections,color)){
@@ -408,7 +846,7 @@ let adminMode=false;
   function candidateTiles(stage,connections){
     const candidates=new Set();
     stage.tiles.forEach((tile,index)=>{
-      if(tile.type==='endpoint'||tile.type==='cross'||tile.touched||tile.primed||connections.colorsByTile[index].size)return;
+      if(tile.type==='endpoint'||tile.type==='cross'||tile.type==='pturn'||tile.touched||tile.primed||connections.colorsByTile[index].size)return;
       const row=Math.floor(index/stage.cols),column=index%stage.cols;
       const receivesFromStart=DELTAS.some(([dr,dc],direction)=>{
         const neighbor=inside(stage,row+dr,column+dc);
@@ -478,7 +916,7 @@ let adminMode=false;
       if(endpoint){
         const target=directions[0];return {type:'endpoint',role:endpoint.role,color:endpoint.color,locked:false,target,rotation:target,required:true,touched:false};
       }
-      if(special){const target=special.type==='cross'?0:special.type==='tee'?targetFor('tee',directions):special.type==='filter'?targetFor('filter',directions):dualTargetFor(definition,special.at);return {type:special.type,target,rotation:target,required:true,touched:special.type==='cross',claimedColor:null,filterColor:special.color};}
+      if(special){const target=(special.type==='cross'||special.type==='pturn')?0:special.type==='tee'?targetFor('tee',directions):special.type==='filter'?targetFor('filter',directions):dualTargetFor(definition,special.at);return {type:special.type,target,rotation:target,required:true,touched:special.type==='cross'||special.type==='pturn',claimedColor:null,filterColor:special.color};}
       if(directions.length===2){
         const type=same(directions,[UP,DOWN])||same(directions,[LEFT,RIGHT])?'straight':'corner';
         const target=targetFor(type,directions);return {type,target,rotation:target,required:true,touched:false};
@@ -489,7 +927,7 @@ let adminMode=false;
     tiles.forEach((tile,index)=>{const row=Math.floor(index/definition.cols),column=index%definition.cols;tile.preAligned=preAligned.has(pointKey([row,column]));});
     const stage={index,variant,templateIndex,rows:definition.rows,cols:definition.cols,tiles,moves:0,locked:true,animating:false,hasPlayerMoved:false,completedColors:new Set(),candidateTiles:new Set(),candidateJustActivated:new Set(),colorKeys:[]};
     tiles.forEach(tile=>{
-      if(tile.type==='cross')return;
+      if(tile.type==='cross'||tile.type==='pturn')return;
       if(tile.type==='endpoint'){
         tile.rotation=tile.role==='start'?tile.target:(tile.target+1+Math.floor(random()*3))%4;
         return;
@@ -517,7 +955,7 @@ let adminMode=false;
   // 2차선이 두 색으로 잠긴 경우에는 다른 길을 풀어 복구할 수 있으므로 이 판정만으로 실패시키지 않습니다.
   function hasNoRouteWithinMoves(stage){
     const requiredNewMoves=stage.tiles.reduce((count,tile)=>{
-      if(!tile.required||tile.type==='endpoint'||tile.type==='cross'||tile.rotation===tile.target||tile.touched)return count;
+      if(!tile.required||tile.type==='endpoint'||tile.type==='cross'||tile.type==='pturn'||tile.rotation===tile.target||tile.touched)return count;
       return count+1;
     },0);
     return stage.moves+requiredNewMoves>stage.maxMoves;
@@ -543,6 +981,8 @@ let adminMode=false;
       if(isComplete(stage,connections))continue;
       // Current UI evaluates only PERFECT and MAX MOVES. One valid extra move is enough. 
       if(stage.maxMoves<=stage.perfectMoves)continue;
+      stage.solutionValidation=validateSpecialUsage(stage);
+      if(!stage.solutionValidation.valid)console.warn("Stage ${index+1} has unused solution ports.",stage.solutionValidation);
       stage.connections=connections;
       stage.candidateTiles=candidateTiles(stage,connections);
       stage.candidateJustActivated=new Set(stage.candidateTiles);
@@ -567,7 +1007,7 @@ let adminMode=false;
     else if(tile.type==='filter')path='<path class="road-path" d="M50 -1V101"/><circle class="filter-core" cx="50" cy="50" r="12"/>';
     else if(tile.type==='corner')path='<path class="road-path" d="M50 -1V50H101"/>';
     else if(tile.type==='tee')path='<path class="road-path" d="M-1 50H101M50 50V101"/>';
-    else if(tile.type==='cross')path='<path class="road-path" d="M50 -1V101M-1 50H101"/>';
+    else if(tile.type==='cross'||tile.type==='pturn')path='<path class="road-path" d="M50 -1V101M-1 50H101"/>';
     else if(tile.type==='dual')path='<path class="road-path" d="M50 -1C50 25 75 50 101 50M-1 50C25 50 50 75 50 101"/>';
     // 시작/끝: 도로 위에 50% 크기의 흰색 사각 패널을 올리는 레이어 구조입니다.
     else path='<path class="road-path endpoint-path" d="M50 50H101"/>'+'<rect class="endpoint-core" x="25" y="25" width="50" height="50" rx="20"/>';
@@ -585,14 +1025,14 @@ let adminMode=false;
   }
   function visualClass(tile,colors){
     if(tile.type==='endpoint')return `color-${tile.color}`;
-    if(tile.type==='cross')return 'touched';
+    if(tile.type==='cross'||tile.type==='pturn')return 'touched';
     if(!colors.size)return tile.touched?'touched':tile.completedColor?`color-${tile.completedColor}`:'idle';
     if(colors.size>1&&tile.type!=='dual')return 'touched';
     if(tile.type==='dual'&&colors.size>1)return 'dual-mixed';
     return `color-${[...colors][0]}`;
   }
   function backgroundForClass(tile,colors){
-    if(tile.type==='cross')return COLORS.mixed;
+    if(tile.type==='cross'||tile.type==='pturn')return COLORS.mixed;
     if(!colors.size)return tile.touched?getComputedStyle(document.documentElement).getPropertyValue('--moved').trim()||'#e3cfb7':'#e7d8c6';
     if(colors.size>1)return COLORS.mixed;
     return COLORS[[...colors][0]];
@@ -603,6 +1043,7 @@ let adminMode=false;
     const justActivated=game.candidateJustActivated&&game.candidateJustActivated.size
       ?new Set(game.candidateJustActivated)
       :new Set([...nextCandidates].filter(index=>!previousCandidates.has(index)));
+    const releasedCandidates=new Set([...previousCandidates].filter(index=>!nextCandidates.has(index)));
     game.candidateTiles=nextCandidates;game.candidateJustActivated=new Set();
     const previousColorKeys=game.colorKeys||[],nextColorKeys=colorKeys(game.connections),connectionTransitions=new Map();
     let transitionOrder=0;
@@ -628,17 +1069,20 @@ let adminMode=false;
       if(tile.type==='endpoint')classes.push('endpoint');
       if(isCandidate)classes.push('candidate');
       if(isCandidate&&justActivated.has(index))classes.push('candidate-enter');
-      if(tile.type!=='cross'&&isAllowed)classes.push('rotatable');
+      const isCandidateRelease=releasedCandidates.has(index)&&!isCandidate&&!colors.size;
+      if(isCandidateRelease)classes.push('candidate-release');
+      if(tile.type!=='cross'&&tile.type!=='pturn'&&isAllowed)classes.push('rotatable');
       const transition=connectionTransitions.get(index);
       if(transition)classes.push(transition.kind);
       button.className=classes.join(' ');button.style.setProperty('--order',index);button.style.setProperty('--endpoint-color',COLORS[tile.color]||COLORS.green);
+      if(isCandidateRelease)button.style.setProperty('--candidate-release-to',backgroundForClass(tile,colors));
       if(transition){
         const fromColors=new Set((transition.from||'').split('|').filter(Boolean));
         button.style.setProperty('--sequence',transition.order);
         button.style.setProperty('--from-bg',backgroundForClass(tile,fromColors));
         button.style.setProperty('--to-bg',backgroundForClass(tile,colors));
       }
-      button.disabled=game.locked||tile.type==='cross';
+      button.disabled=game.locked||tile.type==='cross'||tile.type==='pturn';
       if(tile.type==='dual'&&colors.size>1){
         const [laneZero,laneOne]=dualLaneColors(tile,index,game.connections);
         button.style.setProperty('--dual-lane-zero',COLORS[laneZero]||COLORS.green);
@@ -666,7 +1110,7 @@ let adminMode=false;
   function turn(index){
     if(game.locked||game.animating)return;
     const tile=game.tiles[index],isEndpoint=tile.type==='endpoint';
-    if(tile.type==='cross')return;
+    if(tile.type==='cross'||tile.type==='pturn')return;
     const currentColors=game.connections.colorsByTile[index],isCandidate=game.candidateTiles.has(index);
     const isAllowed=isEndpoint||tile.touched||tile.primed||currentColors.size>0||isCandidate;
     if(!isAllowed){lockedJiggle(index);return;}
@@ -731,5 +1175,7 @@ let adminMode=false;
   resetYesButton.addEventListener('click',()=>{progress=initialProgress();try{localStorage.removeItem(STORAGE_KEY);}catch(error){}saveProgress();resetModal.classList.remove('show');renderHome();});
   restartButton.addEventListener('click',()=>{if(game&&!game.viewer)begin(game.index);});
   window.addEventListener('resize',()=>{if(game&&!homeScreen.classList.contains('show'))render();});
+  // Development-only audit hook: callable from the browser console when authoring stages.
+  window.__linePuzzleValidateCampaign=validateCampaign;
   begin(progress.current);
 })();
