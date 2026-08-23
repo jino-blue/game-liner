@@ -8,7 +8,11 @@
   const $=selector=>document.querySelector(selector);
   const board=$('#board'),frame=$('#boardFrame'),stageLabel=$('#stageLabel'),homeButton=$('#homeButton'),gameScreen=$('#gameScreen'),homeScreen=$('#homeScreen'),homeStageList=$('#homeStageList'),resetProgressButton=$('#resetProgressButton'),resetModal=$('#resetModal'),resetNoButton=$('#resetNoButton'),resetYesButton=$('#resetYesButton'),adminModeButton=$('#adminModeButton');
   const moveCard=$('#moveCard'),moveGradeLabel=$('#moveGradeLabel'),moveUsed=$('#moveUsed'),moveTarget=$('#moveTarget');
-  const startOverlay=$('#startOverlay'),restartButton=$('#restartButton');  const modal=$('#modal'),modalTitle=$('#modalTitle'),modalKicker=$('#modalKicker'),modalText=$('#modalText'),modalButton=$('#modalButton');
+  const startOverlay=$('#startOverlay'),restartButton=$('#restartButton');  const modal=$('#modal'),modalTitle=$('#modalTitle'),modalKicker=$('#modalKicker'),modalStars=$('#modalStars'),modalText=$('#modalText'),modalButton=$('#modalButton');
+  const episodeTitle=$('#episodeTitle'),episodeSubtitle=$('#episodeSubtitle'),episodePrevButton=$('#episodePrevButton'),episodeNextButton=$('#episodeNextButton');
+  const designScreen=$('#designScreen'),designTestButton=$('#designTestButton'),designBackButton=$('#designBackButton');
+  const designContent=$('#designContent');
+  const stageTestScreen=$('#stageTestScreen'),stageTestButton=$('#stageTestButton'),stageTestBackButton=$('#stageTestBackButton'),stageTestContent=$('#stageTestContent');
 
   // Test campaign: complexity rises from one route to colored crossings and split destinations.
   const STAGES=[
@@ -473,6 +477,29 @@
     {at:[5,0],role:'start',color:'red'},{at:[3,2],role:'finish',color:'red'},{at:[5,7],role:'finish',color:'red'},{at:[7,6],role:'finish',color:'red'}
   ]});
 
+  // Stage 28: D3 is a genuine dual lane: green uses up→right, blue uses left→down.
+  const makeLateDual28=()=>({rows:8,cols:8,paths:[
+    {color:'green',points:[[0,3],[1,3],[2,3],[2,4],[2,5],[1,5],[0,5]]},
+    {color:'green',points:[[2,5],[2,6],[2,7]]},
+    {color:'green',points:[[2,6],[3,6],[4,6]]},
+    {color:'blue',points:[[2,0],[2,1],[2,2],[2,3],[3,3],[4,3],[4,4],[4,5],[5,5],[6,5],[6,4],[6,3],[6,2]]},
+    {color:'blue',points:[[6,4],[7,4]]},
+    {color:'blue',points:[[6,5],[6,6],[6,7]]},
+    {color:'red',points:[[5,0],[5,1],[5,2],[4,2],[3,2]]},
+    {color:'red',points:[[5,2],[5,3],[5,4],[5,5],[5,6],[5,7]]},
+    {color:'red',points:[[5,6],[6,6],[7,6]]}
+  ],specials:[
+    {at:[2,3],type:'dual'},
+    {at:[2,5],type:'tee'},{at:[2,6],type:'tee'},
+    {at:[5,5],type:'cross'},{at:[6,6],type:'cross'},
+    {at:[6,5],type:'tee'},{at:[6,4],type:'tee'},
+    {at:[5,2],type:'tee'},{at:[5,6],type:'tee'}
+  ],endpoints:[
+    {at:[0,3],role:'start',color:'green'},{at:[0,5],role:'finish',color:'green'},{at:[2,7],role:'finish',color:'green'},{at:[4,6],role:'finish',color:'green'},
+    {at:[2,0],role:'start',color:'blue'},{at:[6,2],role:'finish',color:'blue'},{at:[7,4],role:'finish',color:'blue'},{at:[6,7],role:'finish',color:'blue'},
+    {at:[5,0],role:'start',color:'red'},{at:[3,2],role:'finish',color:'red'},{at:[5,7],role:'finish',color:'red'},{at:[7,6],role:'finish',color:'red'}
+  ]});
+
   // Re-orient a square network while preserving all solved port relationships.
   const orientSquareNetwork=(definition,turns=0,colorOrder=['green','blue','red'])=>{
     const size=definition.rows-1;
@@ -499,7 +526,7 @@
     makePortComplete27(), makeDispersed28(), makeDispersed29(), makeDispersed30()
   ];
   branchCampaign.forEach(stage=>STAGES.push(stage));
-  const TEST_STAGE_COUNT=STAGES.length;
+  const EPISODE_SIZE=20,EPISODE_COUNT=3,TEST_STAGE_COUNT=EPISODE_SIZE*EPISODE_COUNT;
   // Keep stage order fixed during testing; only the layout inside each stage is randomized.
   const TEST_RANDOM_MODE=false;
   // Set false later to use each original stage layout as a fixed production puzzle.
@@ -702,20 +729,570 @@
   rebuiltCampaign[24]=orientSquareNetwork(makeDispersed30(),1,['blue','red','green']);
   rebuiltCampaign[25]=orientSquareNetwork(makeDispersed30(),2,['red','green','blue']);
   rebuiltCampaign[26]=orientSquareNetwork(makeDispersed30(),3,['green','red','blue']);
-  rebuiltCampaign[27]=orientSquareNetwork(makeDispersed30(),0,['blue','green','red']);
+  rebuiltCampaign[27]=makeLateDual28();
   rebuiltCampaign[28]=makeDispersed29();
   rebuiltCampaign[29]=makeDispersed30();
   STAGES.splice(0,STAGES.length,...rebuiltCampaign);
   STAGE_TEMPLATES.splice(0,STAGE_TEMPLATES.length,...STAGES.map(definition=>[definition]));
 
+  // Episodes are authored as distinct rulesets rather than one long mixed pool.
+  // The junction list is derived from the actual route graph so a branch never
+  // silently becomes a straight tile.
+  const makeNetwork=(rows,cols,paths,endpoints,overrides=[])=>{
+    const edges=new Map(),pointId=point=>`${point[0]},${point[1]}`;
+    const direction=([row,col],[nextRow,nextCol])=>nextRow<row?UP:nextCol>col?RIGHT:nextRow>row?DOWN:LEFT;
+    paths.forEach(({points})=>points.slice(0,-1).forEach((point,index)=>{
+      const next=points[index+1],from=pointId(point),to=pointId(next);
+      if(!edges.has(from))edges.set(from,new Set());if(!edges.has(to))edges.set(to,new Set());
+      edges.get(from).add(direction(point,next));edges.get(to).add(direction(next,point));
+    }));
+    const endpointIds=new Set(endpoints.map(endpoint=>pointId(endpoint.at))),overrideMap=new Map(overrides.map(item=>[pointId(item.at),item.type]));
+    const specials=[];
+    edges.forEach((portsAtPoint,id)=>{
+      if(endpointIds.has(id)||portsAtPoint.size<3)return;
+      const [row,col]=id.split(',').map(Number),type=overrideMap.get(id)||(portsAtPoint.size===4?'cross':'tee');
+      specials.push({at:[row,col],type});
+    });
+    overrides.forEach(item=>{const id=pointId(item.at);if(!specials.some(special=>pointId(special.at)===id)&&!endpointIds.has(id))specials.push({...item});});
+    return {rows,cols,paths,endpoints,specials};
+  };
+  // Move one existing source to an actual junction in its own colour network.
+  // The old source becomes a destination, so every port on the new source must
+  // be solved; this turns the authored graph into a genuine pipe-game fork.
+  const promoteStartToHub=(definition,desiredPorts,seed=0)=>{
+    const id=point=>`${point[0]},${point[1]}`,endpoints=definition.endpoints.map(endpoint=>({...endpoint,at:[...endpoint.at]}));
+    const starts=endpoints.filter(endpoint=>endpoint.role==='start');
+    const endpointIds=new Set(endpoints.map(endpoint=>id(endpoint.at)));
+    for(let offset=0;offset<starts.length;offset++){
+      const source=starts[(seed+offset)%starts.length],edges=new Map(),points=new Map();
+      const sharedIds=new Set(definition.paths.filter(path=>path.color!==source.color).flatMap(path=>path.points.map(id)));
+      definition.paths.filter(path=>path.color===source.color).forEach(({points:pathPoints})=>pathPoints.slice(0,-1).forEach((point,index)=>{
+        const next=pathPoints[index+1],from=id(point),to=id(next);
+        if(!edges.has(from))edges.set(from,new Set());if(!edges.has(to))edges.set(to,new Set());
+        edges.get(from).add(to);edges.get(to).add(from);points.set(from,point);points.set(to,next);
+      }));
+      const candidatesFor=ports=>[...edges].filter(([id,neighbors])=>!endpointIds.has(id)&&!sharedIds.has(id)&&neighbors.size===ports).map(([id])=>points.get(id));
+      const candidates=candidatesFor(desiredPorts).length?candidatesFor(desiredPorts):desiredPorts>2?candidatesFor(2):[];
+      if(!candidates.length)continue;
+      const hub=candidates[seed%candidates.length],hubId=id(hub),sourceId=id(source.at);
+      const updatedEndpoints=endpoints.map(endpoint=>id(endpoint.at)===sourceId?{...endpoint,role:'finish'}:endpoint);
+      updatedEndpoints.push({at:[...hub],role:'start',color:source.color});
+      return {...definition,endpoints:updatedEndpoints,specials:(definition.specials||[]).filter(special=>id(special.at)!==hubId)};
+    }
+    return definition;
+  };
+  const startPortCountForLevel=level=>level===1?1:level<=3?2:level<=8?(level%2?2:3):level<=14?(level%3===0?2:3):3;
+  const applyStartProgression=(stages,stageOffset)=>stages.map((stage,index)=>promoteStartToHub(stage,startPortCountForLevel(index+1),stageOffset+index));
+  // A repeated base puzzle must never be re-issued as a recolour.  This helper
+  // turns it into a genuinely new network by adding a routed destination at a
+  // non-endpoint port; makeNetwork then regenerates the required T/cross tiles.
+  const withNetworkBranch=(definition,color,from,to)=>makeNetwork(
+    definition.rows,definition.cols,
+    [...definition.paths.map(path=>({color:path.color,points:path.points.map(point=>[...point])})),{color,points:[from,to]}],
+    [...definition.endpoints.map(endpoint=>({at:[...endpoint.at],role:endpoint.role,color:endpoint.color})),{at:to,role:'finish',color}]
+  );
+  // Stage 02 / Level 10: two single-port starts, scattered goals, T choices,
+  // and a shared cross. This is a pipe-network decision puzzle, not a long route.
+  const makeStageTwoNetwork10=()=>makeNetwork(6,6,[
+    {color:'green',points:[[3,0],[3,1],[2,1],[1,1],[0,1]]},
+    {color:'green',points:[[3,1],[3,2],[3,3],[3,4],[4,4],[5,4]]},
+    {color:'green',points:[[3,2],[4,2],[5,2]]},
+    {color:'blue',points:[[0,3],[1,3],[1,4],[0,4]]},
+    {color:'blue',points:[[1,3],[2,3],[3,3],[4,3],[5,3]]}
+  ],[
+    {at:[3,0],role:'start',color:'green'},{at:[0,1],role:'finish',color:'green'},{at:[5,4],role:'finish',color:'green'},{at:[5,2],role:'finish',color:'green'},
+    {at:[0,3],role:'start',color:'blue'},{at:[0,4],role:'finish',color:'blue'},{at:[5,3],role:'finish',color:'blue'}
+  ]);
+  // Stage 02 / Level 13: destinations sit on three different board edges.
+  // Both colours must turn through the middle instead of climbing long columns.
+  const makeStageTwoNetwork13=()=>makeNetwork(6,6,[
+    {color:'green',points:[[3,2],[2,2],[1,2],[1,1],[1,0],[0,0]]},
+    {color:'green',points:[[3,2],[3,1],[4,1],[5,1]]},
+    {color:'green',points:[[3,2],[3,3],[3,4],[4,4],[4,5]]},
+    {color:'blue',points:[[2,5],[2,4],[2,3],[1,3],[0,3]]},
+    {color:'blue',points:[[2,3],[3,3],[4,3],[4,2],[5,2]]}
+  ],[
+    {at:[3,2],role:'start',color:'green'},{at:[0,0],role:'finish',color:'green'},{at:[5,1],role:'finish',color:'green'},{at:[4,5],role:'finish',color:'green'},
+    {at:[2,5],role:'start',color:'blue'},{at:[0,3],role:'finish',color:'blue'},{at:[5,2],role:'finish',color:'blue'}
+  ]);
+  const makeSingleEpisodeStage=(layout,color)=>{
+    const paths=layout.paths.map(points=>({color,points})),pointId=point=>`${point[0]},${point[1]}`,edges=new Map(),pointsById=new Map();
+    paths.forEach(({points})=>points.slice(0,-1).forEach((point,index)=>{
+      const next=points[index+1],from=pointId(point),to=pointId(next);
+      if(!edges.has(from))edges.set(from,new Set());if(!edges.has(to))edges.set(to,new Set());
+      edges.get(from).add(to);edges.get(to).add(from);pointsById.set(from,point);pointsById.set(to,next);
+    }));
+    // Every terminal branch is a destination. This prevents a T branch from
+    // ending in an invisible dead line (the issue found at Episode 01 Stage 09).
+    const startId=pointId(layout.start),finishes=[...edges].filter(([id,neighbors])=>id!==startId&&neighbors.size===1).map(([id])=>pointsById.get(id));
+    return makeNetwork(layout.rows,layout.cols,paths,[{at:layout.start,role:'start',color},...finishes.map(at=>({at,role:'finish',color}))]);
+  };
+  const singleLayouts=[
+    {rows:3,cols:3,start:[2,0],finishes:[[0,1]],paths:[[[2,0],[1,0],[1,1],[0,1]]]},
+    {rows:3,cols:5,start:[2,0],finishes:[[0,3]],paths:[[[2,0],[1,0],[1,1],[1,2],[1,3],[0,3]]]},
+    {rows:4,cols:3,start:[3,2],finishes:[[0,1]],paths:[[[3,2],[2,2],[2,1],[1,1],[0,1]]]},
+    {rows:4,cols:4,start:[3,0],finishes:[[0,1],[3,3]],paths:[[[3,0],[2,0],[2,1],[1,1],[0,1]],[[2,1],[2,2],[3,2],[3,3]]]},
+    {rows:4,cols:5,start:[3,0],finishes:[[0,1],[0,4]],paths:[[[3,0],[2,0],[2,1],[1,1],[0,1]],[[2,1],[2,2],[2,3],[2,4],[1,4],[0,4]]]},
+    {rows:5,cols:4,start:[4,3],finishes:[[0,2],[0,0]],paths:[[[4,3],[3,3],[3,2],[2,2],[1,2],[0,2]],[[3,2],[3,1],[3,0],[2,0],[1,0],[0,0]]]},
+    {rows:4,cols:5,start:[3,0],finishes:[[0,1],[0,3],[0,4]],paths:[[[3,0],[2,0],[2,1],[1,1],[0,1]],[[2,1],[2,2],[2,3],[1,3],[0,3]],[[2,3],[2,4],[1,4],[0,4]]]},
+    {rows:5,cols:5,start:[4,0],finishes:[[0,1],[0,3],[0,4]],paths:[[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,4],[2,4],[1,4],[0,4]]]},
+    {rows:5,cols:4,start:[4,0],finishes:[[0,0],[0,2],[0,3]],paths:[[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,2],[2,2],[1,2],[0,2]],[[3,2],[3,3],[2,3],[1,3],[0,3]],[[2,1],[2,0],[1,0],[0,0]]]},
+    {rows:5,cols:5,start:[4,4],finishes:[[0,4],[0,2],[0,0]],paths:[[[4,4],[3,4],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,2],[2,2],[1,2],[0,2]],[[3,2],[3,1],[2,1],[1,1],[0,1]],[[2,1],[2,0],[1,0],[0,0]],[[3,4],[2,4],[1,4],[0,4]]]},
+    {rows:5,cols:5,start:[4,0],finishes:[[0,1],[0,3],[0,4],[0,0]],paths:[[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,4],[2,4],[1,4],[0,4]],[[2,1],[2,0],[1,0],[0,0]]]},
+    {rows:5,cols:5,start:[4,0],finishes:[[0,0],[0,1],[0,3],[0,4]],paths:[[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,4],[2,4],[1,4],[0,4]],[[2,1],[2,0],[1,0],[0,0]]]},
+    {rows:5,cols:5,start:[4,0],finishes:[[0,0],[0,1],[0,2],[0,3]],paths:[[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,2],[2,2],[1,2],[0,2]],[[3,2],[3,3],[2,3],[1,3],[0,3]],[[2,1],[2,0],[1,0],[0,0]]]},
+    {rows:5,cols:5,start:[4,4],finishes:[[0,4],[0,3],[0,2],[0,0]],paths:[[[4,4],[3,4],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,2],[2,2],[1,2],[0,2]],[[3,2],[3,1],[2,1],[1,1],[0,1]],[[2,1],[2,0],[1,0],[0,0]],[[3,4],[2,4],[1,4],[0,4]]]},
+    {rows:5,cols:5,start:[4,0],finishes:[[0,0],[0,1],[0,2],[0,3],[0,4]],paths:[[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,4],[2,4],[1,4],[0,4]],[[2,1],[2,0],[1,0],[0,0]],[[3,2],[2,2],[1,2],[0,2]]]},
+    {rows:5,cols:5,start:[4,4],finishes:[[0,4],[0,3],[0,2],[0,1],[0,0]],paths:[[[4,4],[3,4],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,2],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,0],[2,0],[1,0],[0,0]],[[2,3],[2,4],[1,4],[0,4]],[[3,2],[2,2],[1,2],[0,2]]]},
+    {rows:5,cols:5,start:[4,0],finishes:[[0,0],[0,1],[0,2],[0,3],[0,4]],paths:[[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,4],[2,4],[1,4],[0,4]],[[2,1],[2,0],[1,0],[0,0]],[[3,2],[2,2],[1,2],[0,2]]]},
+    {rows:5,cols:5,start:[4,0],finishes:[[0,0],[0,1],[0,2],[0,3],[0,4]],paths:[[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,2],[2,2],[1,2],[0,2]],[[3,2],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,4],[2,4],[1,4],[0,4]],[[2,1],[2,0],[1,0],[0,0]]]},
+    {rows:5,cols:5,start:[4,4],finishes:[[0,0],[0,1],[0,2],[0,3],[0,4]],paths:[[[4,4],[3,4],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,2],[2,2],[1,2],[0,2]],[[3,2],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,0],[2,0],[1,0],[0,0]],[[3,4],[2,4],[1,4],[0,4]]]},
+    {rows:5,cols:5,start:[4,0],finishes:[[0,0],[0,1],[0,2],[0,3],[0,4]],paths:[[[4,0],[3,0],[3,1],[2,1],[1,1],[0,1]],[[3,1],[3,2],[2,2],[1,2],[0,2]],[[3,2],[3,3],[2,3],[1,3],[0,3]],[[3,3],[3,4],[2,4],[1,4],[0,4]],[[2,1],[2,0],[1,0],[0,0]]]},
+  ];
+  const makeTwoCrossMesh=(primary,secondary)=>makeNetwork(6,6,[
+    {color:primary,points:[[5,0],[4,0],[4,1],[3,1],[2,1],[1,1],[0,1]]},
+    {color:primary,points:[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
+    {color:primary,points:[[3,3],[3,4],[2,4],[1,4],[0,4]]},
+    {color:secondary,points:[[0,2],[1,2],[2,2],[3,2],[4,2],[5,2]]},
+    {color:secondary,points:[[5,5],[4,5],[4,4],[4,3],[4,2]]}
+  ],[
+    {at:[5,0],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[0,3],role:'finish',color:primary},{at:[0,4],role:'finish',color:primary},
+    {at:[0,2],role:'start',color:secondary},{at:[5,2],role:'finish',color:secondary},{at:[5,5],role:'finish',color:secondary}
+  ]);
+  // Episode 01 starts with one-colour reading, then mixes two independent
+  // colour networks. Starts and goals are deliberately spread through the
+  // board instead of collecting at one edge.
+  const makeEpisodeOnePairA=(primary,secondary)=>makeNetwork(5,5,[
+    {color:primary,points:[[4,1],[4,2],[3,2],[2,2],[1,2],[0,2]]},
+    {color:primary,points:[[3,2],[3,3],[3,4],[2,4]]},
+    {color:secondary,points:[[1,1],[2,1],[2,0],[1,0],[0,0]]},
+    {color:secondary,points:[[2,1],[3,1],[3,0]]}
+  ],[
+    {at:[4,1],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},{at:[2,4],role:'finish',color:primary},
+    {at:[1,1],role:'start',color:secondary},{at:[0,0],role:'finish',color:secondary},{at:[3,0],role:'finish',color:secondary}
+  ]);
+  const makeEpisodeOnePairB=(primary,secondary)=>makeNetwork(5,5,[
+    {color:primary,points:[[4,2],[3,2],[3,1],[2,1],[1,1],[0,1]]},
+    {color:primary,points:[[3,1],[3,0],[2,0]]},
+    {color:secondary,points:[[1,3],[1,4],[2,4],[3,4],[4,4]]},
+    {color:secondary,points:[[2,4],[2,3],[3,3],[4,3]]}
+  ],[
+    {at:[4,2],role:'start',color:primary},{at:[0,1],role:'finish',color:primary},{at:[2,0],role:'finish',color:primary},
+    {at:[1,3],role:'start',color:secondary},{at:[4,4],role:'finish',color:secondary},{at:[4,3],role:'finish',color:secondary}
+  ]);
+  const makeEpisodeOnePairC=(primary,secondary)=>makeNetwork(5,5,[
+    {color:primary,points:[[3,0],[3,1],[2,1],[1,1],[1,2],[0,2]]},
+    {color:primary,points:[[2,1],[2,2],[2,3],[1,3]]},
+    {color:secondary,points:[[4,4],[3,4],[3,3],[4,3]]},
+    {color:secondary,points:[[3,3],[2,3],[2,4],[1,4],[0,4]]}
+  ],[
+    {at:[3,0],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},{at:[1,3],role:'finish',color:primary},
+    {at:[4,4],role:'start',color:secondary},{at:[4,3],role:'finish',color:secondary},{at:[0,4],role:'finish',color:secondary}
+  ]);
+  const makeEpisodeOnePairD=(primary,secondary)=>makeNetwork(5,5,[
+    {color:primary,points:[[4,1],[3,1],[2,1],[2,2],[1,2],[0,2]]},
+    {color:primary,points:[[2,1],[2,0],[1,0]]},
+    {color:secondary,points:[[1,4],[2,4],[3,4],[3,3],[4,3]]},
+    {color:secondary,points:[[3,3],[3,2],[4,2]]}
+  ],[
+    {at:[4,1],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},{at:[1,0],role:'finish',color:primary},
+    {at:[1,4],role:'start',color:secondary},{at:[4,3],role:'finish',color:secondary},{at:[4,2],role:'finish',color:secondary}
+  ]);
+  const makeEpisodeOnePairE=(primary,secondary)=>makeNetwork(5,5,[
+    {color:primary,points:[[4,3],[3,3],[3,2],[2,2],[1,2],[0,2]]},
+    {color:primary,points:[[3,2],[3,1],[2,1]]},
+    {color:secondary,points:[[1,0],[2,0],[3,0],[4,0]]},
+    {color:secondary,points:[[2,0],[2,1],[1,1],[0,1]]}
+  ],[
+    {at:[4,3],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},{at:[2,1],role:'finish',color:primary},
+    {at:[1,0],role:'start',color:secondary},{at:[4,0],role:'finish',color:secondary},{at:[0,1],role:'finish',color:secondary}
+  ]);
+  const makeEpisodeOnePairF=(primary,secondary)=>makeNetwork(5,5,[
+    {color:primary,points:[[4,0],[3,0],[3,1],[3,2],[2,2],[1,2],[0,2]]},
+    {color:primary,points:[[3,2],[3,3],[2,3]]},
+    {color:secondary,points:[[0,4],[1,4],[1,3],[1,2],[1,1],[0,1]]},
+    {color:secondary,points:[[1,1],[2,1],[2,0],[1,0]]}
+  ],[
+    {at:[4,0],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},{at:[2,3],role:'finish',color:primary},
+    {at:[0,4],role:'start',color:secondary},{at:[0,1],role:'finish',color:secondary},{at:[1,0],role:'finish',color:secondary}
+  ]);
+  // Level 02 introduces the straight two-way source. When it is horizontal,
+  // both neighboring cells (including C2) are active candidates.
+  const makeEpisodeOneLevel02=()=>makeNetwork(3,5,[
+    {color:'blue',points:[[1,1],[1,0],[0,0]]},
+    {color:'blue',points:[[1,1],[1,2],[1,3],[2,3]]}
+  ],[
+    {at:[1,1],role:'start',color:'blue'},{at:[0,0],role:'finish',color:'blue'},{at:[2,3],role:'finish',color:'blue'}
+  ]);
+  const makeCenteredForkA=color=>makeNetwork(5,5,[
+    {color,points:[[2,2],[3,2],[3,1],[2,1],[1,1],[0,1],[0,0]]},
+    {color,points:[[3,1],[3,0],[4,0]]},
+    {color,points:[[3,2],[3,3],[2,3],[1,3],[0,3],[0,4]]}
+  ],[
+    {at:[2,2],role:'start',color},{at:[0,0],role:'finish',color},{at:[4,0],role:'finish',color},{at:[0,4],role:'finish',color}
+  ]);
+  const makeCenteredForkB=color=>makeNetwork(5,5,[
+    {color,points:[[2,2],[3,2],[3,1],[2,1],[1,1],[0,1],[0,0]]},
+    {color,points:[[3,1],[3,0],[4,0]]},
+    {color,points:[[3,2],[3,3],[4,3],[4,4]]}
+  ],[
+    {at:[2,2],role:'start',color},{at:[0,0],role:'finish',color},{at:[4,0],role:'finish',color},{at:[4,4],role:'finish',color}
+  ]);
+  const makeCenteredForkC=color=>makeNetwork(5,5,[
+    {color,points:[[2,2],[3,2],[3,3],[4,3],[4,4]]},
+    {color,points:[[3,3],[2,3],[1,3],[0,3]]},
+    {color,points:[[3,2],[3,1],[4,1],[4,0]]}
+  ],[
+    {at:[2,2],role:'start',color},{at:[4,4],role:'finish',color},{at:[0,3],role:'finish',color},{at:[4,0],role:'finish',color}
+  ]);
+  const makeCenteredForkD=color=>makeNetwork(5,5,[
+    {color,points:[[2,2],[1,2],[1,1],[0,1],[0,0]]},
+    {color,points:[[1,1],[1,0],[2,0],[3,0],[4,0]]},
+    {color,points:[[1,2],[1,3],[2,3],[3,3],[4,3],[4,4]]}
+  ],[
+    {at:[2,2],role:'start',color},{at:[0,0],role:'finish',color},{at:[4,0],role:'finish',color},{at:[4,4],role:'finish',color}
+  ]);
+  const makeEpisodeOneCrossA=(primary,secondary)=>makeNetwork(5,5,[
+    {color:primary,points:[[4,2],[3,2],[2,2],[1,2],[0,2]]},
+    {color:primary,points:[[3,2],[3,3],[4,3]]},
+    {color:secondary,points:[[2,0],[2,1],[2,2],[2,3],[2,4]]},
+    {color:secondary,points:[[2,3],[1,3],[0,3]]}
+  ],[
+    {at:[4,2],role:'start',color:primary},{at:[0,2],role:'finish',color:primary},{at:[4,3],role:'finish',color:primary},
+    {at:[2,0],role:'start',color:secondary},{at:[2,4],role:'finish',color:secondary},{at:[0,3],role:'finish',color:secondary}
+  ]);
+  const makeEpisodeOneCrossB=(primary,secondary)=>makeNetwork(5,5,[
+    {color:primary,points:[[3,0],[3,1],[2,1],[2,2],[2,3],[1,3],[0,3]]},
+    {color:primary,points:[[2,1],[1,1],[0,1]]},
+    {color:secondary,points:[[4,2],[3,2],[2,2],[1,2],[0,2]]},
+    {color:secondary,points:[[3,2],[3,3],[4,3]]}
+  ],[
+    {at:[3,0],role:'start',color:primary},{at:[0,3],role:'finish',color:primary},{at:[0,1],role:'finish',color:primary},
+    {at:[4,2],role:'start',color:secondary},{at:[0,2],role:'finish',color:secondary},{at:[4,3],role:'finish',color:secondary}
+  ]);
+  const makeEpisodeOneCrossC=(primary,secondary)=>makeNetwork(5,5,[
+    {color:primary,points:[[0,2],[1,2],[2,2],[3,2],[4,2]]},
+    {color:primary,points:[[3,2],[3,1],[4,1]]},
+    {color:secondary,points:[[2,4],[2,3],[2,2],[2,1],[2,0]]},
+    {color:secondary,points:[[2,1],[1,1],[0,1]]}
+  ],[
+    {at:[0,2],role:'start',color:primary},{at:[4,2],role:'finish',color:primary},{at:[4,1],role:'finish',color:primary},
+    {at:[2,4],role:'start',color:secondary},{at:[2,0],role:'finish',color:secondary},{at:[0,1],role:'finish',color:secondary}
+  ]);
+  const episodeOneSingles=[
+    ...singleLayouts.slice(0,4).map((layout,index)=>reframeStage(makeSingleEpisodeStage(layout,'green'),index)),
+    reframeStage(makeCenteredForkA('green'),4),reframeStage(makeCenteredForkB('green'),5),reframeStage(makeCenteredForkC('green'),6),reframeStage(makeCenteredForkD('green'),7)
+  ];
+  const episodeOnePairSeeds=[
+    makeEpisodeOnePairA('green','blue'),makeEpisodeOnePairB('blue','red'),makeEpisodeOnePairD('red','green'),makeEpisodeOneCrossA('green','blue'),
+    withNetworkBranch(makeEpisodeOnePairB('blue','red'),'blue',[2,1],[2,2]),withNetworkBranch(makeEpisodeOnePairA('red','green'),'red',[2,2],[2,3]),makeEpisodeOneCrossB('green','red'),withNetworkBranch(makeEpisodeOnePairD('blue','green'),'blue',[1,2],[1,3]),
+    withNetworkBranch(makeEpisodeOnePairA('red','blue'),'red',[1,2],[1,3]),makeEpisodeOneCrossC('green','blue'),withNetworkBranch(makeEpisodeOnePairB('blue','red'),'red',[1,4],[0,4]),withNetworkBranch(makeEpisodeOnePairA('green','red'),'green',[3,3],[2,3])
+  ];
+  const episodeOne=applyStartProgression([...episodeOneSingles,...episodeOnePairSeeds.map((stage,index)=>reframeStage(stage,index+8))],0);
+  episodeOne[1]=makeEpisodeOneLevel02();
+  const episodeTwoSeeds=[
+    makeCrossFork('green','blue'),makeCenterFork('green','blue'),makeSpiralT('green','blue'),withNetworkBranch(makeCrossFork('blue','red'),'blue',[2,3],[3,3]),makeTwoCrossMesh('green','blue'),
+    withNetworkBranch(makeTwoCrossMesh('green','blue'),'green',[1,4],[1,5]),makeCenterFork('blue','red'),withNetworkBranch(makeSpiralT('red','green'),'red',[2,0],[2,1]),withNetworkBranch(makeCrossFork('blue','green'),'blue',[1,1],[1,0]),withNetworkBranch(makeTwoCrossMesh('blue','red'),'blue',[2,4],[2,5]),
+    withNetworkBranch(makeTwoCrossMesh('red','green'),'green',[4,4],[5,4]),withNetworkBranch(makeCenterFork('green','red'),'green',[2,1],[2,0]),withNetworkBranch(makeTwoCrossMesh('red','blue'),'red',[3,4],[3,5]),withNetworkBranch(makeSpiralT('blue','green'),'green',[3,3],[4,3]),withNetworkBranch(makeCrossFork('red','blue'),'red',[1,3],[1,4]),
+    withNetworkBranch(makeTwoCrossMesh('blue','red'),'blue',[4,1],[5,1]),withNetworkBranch(makeTwoCrossMesh('green','red'),'green',[2,1],[2,0]),withNetworkBranch(makeCenterFork('red','green'),'red',[1,1],[1,0]),withNetworkBranch(makeTwoCrossMesh('blue','green'),'blue',[1,1],[1,0]),withNetworkBranch(makeTwoCrossMesh('green','blue'),'green',[3,4],[3,5])
+  ];
+  const episodeTwo=applyStartProgression(episodeTwoSeeds.map((stage,index)=>reframeStage(stage,index+20)),20);
+  episodeTwo[9]=promoteStartToHub(makeStageTwoNetwork10(),startPortCountForLevel(10),29);
+  episodeTwo[12]=makeStageTwoNetwork13();
+  // Stage 02 / Level 03: keep the red destination on its intended curved
+  // route.  With both endpoints on the top row, random empty tiles made a
+  // misleading four-block straight shortcut across the board.
+  episodeTwo[2]={
+    ...episodeTwo[2],
+    paths:episodeTwo[2].paths.map(path=>path.color==='red'?{...path,points:path.points.slice(0,-1)}:path),
+    endpoints:episodeTwo[2].endpoints.map(endpoint=>endpoint.role==='finish'&&endpoint.color==='red'?{...endpoint,at:[1,1]}:endpoint)
+  };
+  // Stage 02 / Level 05: a central green three-way source and destinations on
+  // three different sides replace the old three-column climb to the top edge.
+  episodeTwo[4]=makeNetwork(6,6,[
+    {color:'green',points:[[3,2],[3,1],[2,1],[1,1],[1,0],[0,0]]},
+    {color:'green',points:[[3,2],[4,2],[4,1],[5,1]]},
+    {color:'green',points:[[3,2],[3,3],[3,4],[2,4],[1,4],[0,4]]},
+    {color:'blue',points:[[0,3],[1,3],[2,3],[3,3],[4,3],[5,3]]},
+    {color:'blue',points:[[4,3],[4,4],[5,4]]}
+  ],[
+    {at:[3,2],role:'start',color:'green'},{at:[0,0],role:'finish',color:'green'},{at:[5,1],role:'finish',color:'green'},{at:[0,4],role:'finish',color:'green'},
+    {at:[0,3],role:'start',color:'blue'},{at:[5,3],role:'finish',color:'blue'},{at:[5,4],role:'finish',color:'blue'}
+  ]);
+  // Stage 02 / Level 11 introduces the two-line tile.  The green route uses
+  // its up→right lane and the blue route uses its left→down lane, so both
+  // colours must be read as independent routes rather than a cross junction.
+  episodeTwo[10]=makeNetwork(6,6,[
+    {color:'green',points:[[0,2],[1,2],[1,3],[2,3],[3,3],[3,4],[4,4],[5,4]]},
+    {color:'green',points:[[3,4],[2,4],[1,4],[1,5]]},
+    {color:'blue',points:[[3,0],[3,1],[3,2],[3,3],[4,3],[5,3]]},
+    {color:'blue',points:[[4,3],[4,2],[5,2]]}
+  ],[
+    {at:[0,2],role:'start',color:'green'},{at:[5,4],role:'finish',color:'green'},{at:[1,5],role:'finish',color:'green'},
+    {at:[3,0],role:'start',color:'blue'},{at:[5,3],role:'finish',color:'blue'},{at:[5,2],role:'finish',color:'blue'}
+  ],[{at:[3,3],type:'dual'}]);
+  // Stage 02 / Level 14: two colours meet at a central cross, with each
+  // network ending on different sides instead of collecting at one edge.
+  episodeTwo[13]=makeNetwork(6,6,[
+    {color:'green',points:[[2,2],[2,1],[1,1],[1,0],[0,0]]},
+    {color:'green',points:[[2,2],[1,2],[0,2]]},
+    {color:'green',points:[[2,2],[2,3],[3,3],[4,3],[5,3]]},
+    {color:'blue',points:[[3,0],[3,1],[3,2],[3,3],[3,4],[2,4],[1,4],[0,4]]},
+    {color:'blue',points:[[3,4],[4,4],[5,4]]}
+  ],[
+    {at:[2,2],role:'start',color:'green'},{at:[0,0],role:'finish',color:'green'},{at:[0,2],role:'finish',color:'green'},{at:[5,3],role:'finish',color:'green'},
+    {at:[3,0],role:'start',color:'blue'},{at:[0,4],role:'finish',color:'blue'},{at:[5,4],role:'finish',color:'blue'}
+  ]);
+  // Stage 02 / Level 17: a distinct, mirrored-feeling mesh with two interior
+  // sources and destinations split between top, bottom, and side areas.
+  episodeTwo[16]=makeNetwork(6,6,[
+    {color:'green',points:[[4,4],[4,3],[3,3],[2,3],[1,3],[1,2],[0,2]]},
+    {color:'green',points:[[4,4],[5,4],[5,5]]},
+    {color:'green',points:[[4,4],[4,5],[3,5]]},
+    {color:'red',points:[[1,1],[2,1],[3,1],[3,2],[3,3],[3,4],[2,4],[1,4],[0,4]]},
+    {color:'red',points:[[3,2],[4,2],[5,2]]}
+  ],[
+    {at:[4,4],role:'start',color:'green'},{at:[0,2],role:'finish',color:'green'},{at:[5,5],role:'finish',color:'green'},{at:[3,5],role:'finish',color:'green'},
+    {at:[1,1],role:'start',color:'red'},{at:[0,4],role:'finish',color:'red'},{at:[5,2],role:'finish',color:'red'}
+  ]);
+  const episodeThreeSeeds=[
+    baseCampaign[4],baseCampaign[6],makeOffsetDual('green','blue','red'),makeTriDual(['green','blue','red']),makeDualTower('blue','red','green'),
+    makeInterwoven09(),makeAdvancedTrident('green','blue','red'),makeAdvancedPTurnCross('blue','red','green'),makeBossMesh('red','green','blue'),makeCrossSpoke('green','blue','red'),
+    makeBossPTurn('blue','green','red'),makeFinalCrown('red','blue','green'),makeMultiCross('green','red','blue'),makeAdvancedSpiral('blue','red','green'),makePortComplete27(),
+    makePortComplete27(),makeInterwoven25(),makeReference26(),makeTriLadder('green','red','blue'),makeFinalSwitchboard('red','green','blue')
+  ];
+  const makeFourWayStartFinal=()=>makeNetwork(7,7,[
+    {color:'green',points:[[3,3],[2,3],[1,3],[0,3]]},{color:'green',points:[[3,3],[4,3],[5,3],[6,3]]},
+    {color:'green',points:[[3,3],[3,2],[3,1],[3,0]]},{color:'green',points:[[3,3],[3,4],[3,5],[3,6]]},
+    {color:'blue',points:[[0,0],[1,0],[1,1],[1,2],[1,3],[1,4],[1,5],[0,5]]},{color:'blue',points:[[1,4],[2,4],[2,5],[2,6]]},
+    {color:'red',points:[[6,0],[5,0],[5,1],[4,1],[4,2],[4,3],[4,4],[5,4],[6,4]]},{color:'red',points:[[4,4],[4,5],[5,5],[6,5]]}
+  ],[
+    {at:[3,3],role:'start',color:'green'},{at:[0,3],role:'finish',color:'green'},{at:[6,3],role:'finish',color:'green'},{at:[3,0],role:'finish',color:'green'},{at:[3,6],role:'finish',color:'green'},
+    {at:[0,0],role:'start',color:'blue'},{at:[0,5],role:'finish',color:'blue'},{at:[2,6],role:'finish',color:'blue'},
+    {at:[6,0],role:'start',color:'red'},{at:[6,4],role:'finish',color:'red'},{at:[6,5],role:'finish',color:'red'}
+  ]);
+  const episodeThree=applyStartProgression(episodeThreeSeeds.map((stage,index)=>reframeStage(stage,index+40)),40);
+  // Stage 03 / Level 12: three colour networks occupy separate regions and
+  // meet at one readable central cross; no colour finishes as a top-edge row.
+  episodeThree[11]=makeNetwork(6,6,[
+    {color:'green',points:[[5,0],[4,0],[4,1],[4,2],[4,3],[3,3],[2,3],[1,3],[0,3]]},
+    {color:'blue',points:[[0,5],[1,5],[2,5],[3,5],[3,4],[3,3],[3,2],[3,1],[3,0]]},
+    {color:'blue',points:[[3,2],[4,2],[5,2]]},
+    {color:'red',points:[[2,2],[2,1],[1,1],[0,1]]},
+    {color:'red',points:[[2,2],[1,2],[0,2]]}
+  ],[
+    {at:[5,0],role:'start',color:'green'},{at:[0,3],role:'finish',color:'green'},
+    {at:[0,5],role:'start',color:'blue'},{at:[3,0],role:'finish',color:'blue'},{at:[5,2],role:'finish',color:'blue'},
+    {at:[2,2],role:'start',color:'red'},{at:[0,1],role:'finish',color:'red'},{at:[0,2],role:'finish',color:'red'}
+  ]);
+  // Stage 03 / Level 18: pull the blue source into D3, place a green goal at
+  // C3, and send the red network through the left half of the board.  This
+  // avoids the former top-right cluster and makes the whole 7×7 board matter.
+  episodeThree[17]=makeNetwork(7,7,[
+    {color:'green',points:[[3,1],[4,1],[4,2],[3,2],[2,2]]},
+    {color:'green',points:[[3,1],[3,0],[4,0],[5,0]]},
+    {color:'green',points:[[3,1],[3,2],[3,3],[3,4],[3,5],[3,6]]},
+    {color:'blue',points:[[2,3],[3,3],[4,3],[5,3],[6,3]]},
+    {color:'blue',points:[[4,3],[4,4],[4,5],[4,6]]},
+    {color:'blue',points:[[5,3],[5,2],[6,2]]},
+    {color:'red',points:[[0,6],[0,5],[0,4],[0,3],[0,2],[1,2],[1,1],[2,1],[2,0]]},
+    {color:'red',points:[[0,3],[1,3],[1,4],[2,4]]},
+    {color:'red',points:[[1,1],[1,0],[0,0]]}
+  ],[
+    {at:[3,1],role:'start',color:'green'},{at:[2,2],role:'finish',color:'green'},{at:[5,0],role:'finish',color:'green'},{at:[3,6],role:'finish',color:'green'},
+    {at:[2,3],role:'start',color:'blue'},{at:[6,3],role:'finish',color:'blue'},{at:[4,6],role:'finish',color:'blue'},{at:[6,2],role:'finish',color:'blue'},
+    {at:[0,6],role:'start',color:'red'},{at:[2,0],role:'finish',color:'red'},{at:[2,4],role:'finish',color:'red'},{at:[0,0],role:'finish',color:'red'}
+  ]);
+  episodeThree[19]=makeFourWayStartFinal();
+  // Do not line up three or more destinations of one colour on the same board
+  // edge.  A nearby unused pocket becomes the new destination, preserving the
+  // route but forcing a turn and spreading the player's attention around the
+  // board.
+  const disperseFinishClusters=definition=>{
+    const key=([row,column])=>`${row},${column}`;
+    const paths=definition.paths.map(path=>({...path,points:path.points.map(point=>[...point])}));
+    const endpoints=definition.endpoints.map(endpoint=>({...endpoint,at:[...endpoint.at]}));
+    const specials=new Set((definition.specials||[]).map(special=>key(special.at)));
+    const edgeFor=([row,column])=>row===0?'top':row===definition.rows-1?'bottom':column===0?'left':column===definition.cols-1?'right':'inner';
+    const directions=[[-1,0],[0,1],[1,0],[0,-1]];
+    const inside=([row,column])=>row>=0&&row<definition.rows&&column>=0&&column<definition.cols;
+    [...new Set(endpoints.map(endpoint=>endpoint.color))].forEach(color=>{
+      while(true){
+        const finishes=endpoints.map((endpoint,index)=>({endpoint,index})).filter(item=>item.endpoint.role==='finish'&&item.endpoint.color===color);
+        const counts=finishes.reduce((result,{endpoint})=>{const edge=edgeFor(endpoint.at);result[edge]=(result[edge]||0)+1;return result;},{top:0,bottom:0,left:0,right:0,inner:0});
+        const crowded=['top','bottom','left','right'].find(edge=>counts[edge]>=3);
+        if(!crowded)break;
+        let moved=false;
+        for(const {endpoint, index:endpointIndex} of finishes.filter(item=>edgeFor(item.endpoint.at)===crowded)){
+          const occupied=new Set(paths.flatMap(path=>path.points.map(key))),endpointCells=new Set(endpoints.map(item=>key(item.at)));
+          endpointCells.delete(key(endpoint.at));occupied.delete(key(endpoint.at));
+          for(let pathIndex=0;pathIndex<paths.length&&!moved;pathIndex++){
+            const path=paths[pathIndex],atStart=key(path.points[0])===key(endpoint.at),atEnd=key(path.points[path.points.length-1])===key(endpoint.at);
+            if(path.color!==color||(!atStart&&!atEnd))continue;
+            const queue=[[endpoint.at,[endpoint.at]]],seen=new Set([key(endpoint.at)]);
+            let route=null;
+            while(queue.length&&!route){
+              const [point,trail]=queue.shift();
+              directions.forEach(([rowOffset,columnOffset])=>{
+                if(route)return;
+                const next=[point[0]+rowOffset,point[1]+columnOffset],nextKey=key(next);
+                if(!inside(next)||seen.has(nextKey)||occupied.has(nextKey)||endpointCells.has(nextKey)||specials.has(nextKey))return;
+                const nextTrail=[...trail,next];seen.add(nextKey);
+                if(nextTrail.length>=3&&edgeFor(next)!==crowded){route=nextTrail;return;}
+                queue.push([next,nextTrail]);
+              });
+            }
+            if(!route)continue;
+            paths[pathIndex]={...path,points:atEnd?[...path.points,...route.slice(1)]:[...route.slice(1).reverse(),...path.points]};
+            endpoints[endpointIndex]={...endpoint,at:route[route.length-1]};
+            moved=true;
+          }
+          if(moved)break;
+        }
+        if(!moved)break;
+      }
+    });
+    return {...definition,paths,endpoints};
+  };
+  // A colour route made of nothing but one long row/column reads as a free
+  // answer, even inside a bigger board.  Give each such route a small,
+  // unoccupied detour so it has real corner decisions without changing its
+  // endpoints, colour, or the authored network around it.
+  const addTurnsToStraightColorRoutes=definition=>{
+    const key=([row,column])=>`${row},${column}`;
+    let endpointList=definition.endpoints.map(endpoint=>({...endpoint,at:[...endpoint.at]}));
+    const endpoints=new Set(endpointList.map(endpoint=>key(endpoint.at)));
+    const specials=new Set((definition.specials||[]).map(special=>key(special.at)));
+    const paths=definition.paths.map(path=>({...path,points:path.points.map(point=>[...point])}));
+    const occupied=()=>new Set(paths.flatMap(path=>path.points.map(key)));
+    const colors=[...new Set(paths.map(path=>path.color))];
+    colors.forEach(color=>{
+      const colorPaths=paths.map((path,index)=>({path,index})).filter(item=>item.path.color===color);
+      const colorPoints=[...new Set(colorPaths.flatMap(item=>item.path.points.map(key)))].map(value=>value.split(',').map(Number));
+      if(colorPoints.length<4)return;
+      const isHorizontal=colorPoints.every(([row])=>row===colorPoints[0][0]);
+      const isVertical=colorPoints.every(([,column])=>column===colorPoints[0][1]);
+      if(!isHorizontal&&!isVertical)return;
+      const blocked=occupied();
+      const offsets=isHorizontal?[[-1,0],[1,0]]:[[0,-1],[0,1]];
+      let added=false;
+      for(const {path,index} of colorPaths){
+        if(added||path.points.length<4)continue;
+        const edgeOrder=Array.from({length:path.points.length-1},(_,offset)=>offset)
+          .sort((first,second)=>Math.abs(first-(path.points.length-2)/2)-Math.abs(second-(path.points.length-2)/2));
+        for(const edgeIndex of edgeOrder){
+          const first=path.points[edgeIndex],second=path.points[edgeIndex+1];
+          for(const [rowOffset,columnOffset] of offsets){
+            const detourFirst=[first[0]+rowOffset,first[1]+columnOffset],detourSecond=[second[0]+rowOffset,second[1]+columnOffset];
+            const valid=point=>point[0]>=0&&point[0]<definition.rows&&point[1]>=0&&point[1]<definition.cols;
+            if(!valid(detourFirst)||!valid(detourSecond))continue;
+            if([detourFirst,detourSecond].some(point=>blocked.has(key(point))||endpoints.has(key(point))||specials.has(key(point))))continue;
+            paths[index]={...path,points:[...path.points.slice(0,edgeIndex+1),detourFirst,detourSecond,...path.points.slice(edgeIndex+1)]};
+            added=true;
+            break;
+          }
+          if(added)break;
+        }
+      }
+      // Tighter boards sometimes have no free cell directly beside the line.
+      // In that case, route one edge around the nearest open pocket instead of
+      // leaving a visually trivial straight answer in place.
+      if(!added){
+        const directions=[[-1,0],[0,1],[1,0],[0,-1]];
+        const canUse=point=>point[0]>=0&&point[0]<definition.rows&&point[1]>=0&&point[1]<definition.cols&&(!blocked.has(key(point))||false)&&!endpoints.has(key(point))&&!specials.has(key(point));
+        for(const {path,index} of colorPaths){
+          if(added||path.points.length<4)continue;
+          for(let edgeIndex=0;edgeIndex<path.points.length-1;edgeIndex++){
+            const first=path.points[edgeIndex],second=path.points[edgeIndex+1],firstKey=key(first),secondKey=key(second);
+            const queue=[[first,[first]]],seen=new Set([firstKey]);
+            let detour=null;
+            while(queue.length&&!detour){
+              const [point,route]=queue.shift();
+              directions.forEach(([rowOffset,columnOffset])=>{
+                if(detour)return;
+                const next=[point[0]+rowOffset,point[1]+columnOffset],nextKey=key(next);
+                if(nextKey===secondKey){
+                  if(route.length>1)detour=[...route,second];
+                  return;
+                }
+                if(seen.has(nextKey)||!canUse(next))return;
+                seen.add(nextKey);queue.push([next,[...route,next]]);
+              });
+            }
+            if(!detour)continue;
+            paths[index]={...path,points:[...path.points.slice(0,edgeIndex),...detour,...path.points.slice(edgeIndex+2)]};
+            added=true;
+            break;
+          }
+        }
+      }
+      // If a dense network occupies both sides of every edge, extend one of
+      // its destinations into the closest free side cell.  This keeps every
+      // existing junction intact while still giving the route a final curve.
+      if(!added){
+        const blocked=occupied();
+        for(let endpointIndex=0;endpointIndex<endpointList.length;endpointIndex++){
+          const endpoint=endpointList[endpointIndex];
+          if(endpoint.role!=='finish'||endpoint.color!==color||added)continue;
+          for(const {path,index} of colorPaths){
+            const atStart=key(path.points[0])===key(endpoint.at),atEnd=key(path.points[path.points.length-1])===key(endpoint.at);
+            if(!atStart&&!atEnd)continue;
+            const neighbor=atStart?path.points[1]:path.points[path.points.length-2];
+            const rowDirection=endpoint.at[0]-neighbor[0],columnDirection=endpoint.at[1]-neighbor[1];
+            for(const [rowOffset,columnOffset] of [[-1,0],[0,1],[1,0],[0,-1]]){
+              if(rowDirection*rowOffset+columnDirection*columnOffset!==0)continue;
+              const moved=[endpoint.at[0]+rowOffset,endpoint.at[1]+columnOffset];
+              const movedKey=key(moved);
+              if(moved[0]<0||moved[0]>=definition.rows||moved[1]<0||moved[1]>=definition.cols||blocked.has(movedKey)||endpoints.has(movedKey)||specials.has(movedKey))continue;
+              paths[index]={...path,points:atStart?[moved,...path.points]:[...path.points,moved]};
+              endpointList[endpointIndex]={...endpoint,at:moved};
+              endpoints.delete(key(endpoint.at));endpoints.add(movedKey);
+              added=true;
+              break;
+            }
+            if(added)break;
+          }
+        }
+      }
+    });
+    return {...definition,endpoints:endpointList,paths};
+  };
+  STAGES.splice(0,STAGES.length,...[...episodeOne,...episodeTwo,...episodeThree]
+    .map(disperseFinishClusters)
+    .map(addTurnsToStraightColorRoutes));
+  STAGE_TEMPLATES.splice(0,STAGE_TEMPLATES.length,...STAGES.map(definition=>[definition]));
+
+  // Independent board-size tests use the same stage builder and interaction rules
+  // as the campaign, but never appear in the campaign's progress list.
+  const TEST_SIZE_STAGE_INDEX=new Map();
+  const makeSizeTestStage=(cols,rows)=>{
+    const upPath=Array.from({length:rows},(_,offset)=>[rows-1-offset,0]);
+    const acrossPath=Array.from({length:cols-1},(_,offset)=>[0,offset+1]);
+    return {rows,cols,testLabel:`${cols}×${rows}`,paths:[{color:'green',points:[...upPath,...acrossPath]}],endpoints:[
+      {at:[rows-1,0],role:'start',color:'green'},{at:[0,cols-1],role:'finish',color:'green'}
+    ]};
+  };
+  for(let rows=3;rows<=8;rows++)for(let cols=3;cols<=8;cols++){
+    const index=STAGES.length,definition=makeSizeTestStage(cols,rows);
+    STAGES.push(definition);STAGE_TEMPLATES.push([definition]);TEST_SIZE_STAGE_INDEX.set(`${cols}x${rows}`,index);
+  }
+
   const lastLayoutByStage=Array(STAGES.length).fill(null);
 
-  const STORAGE_KEY='line-puzzle-campaign-v3';
+  const STORAGE_KEY='line-puzzle-campaign-v4',LEGACY_PROFILE_STORAGE_KEY='line-puzzle-player-profile-v1';
   const initialProgress=()=>({unlocked:1,current:0,results:{},solutions:{}});
-  function loadProgress(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));if(saved&&Number.isInteger(saved.unlocked)&&saved.results)return {...initialProgress(),...saved};}catch(error){}return initialProgress();}
+  function loadProgress(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));if(saved&&Number.isInteger(saved.unlocked)&&saved.results){const {movesByStage,...campaign}=saved;return {...initialProgress(),...campaign};}}catch(error){}return initialProgress();}
   function saveProgress(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(progress));}catch(error){}}
-  let progress=loadProgress();progress.unlocked=Math.min(TEST_STAGE_COUNT,Math.max(1,progress.unlocked));progress.current=Math.min(progress.unlocked-1,Math.max(0,progress.current));
-let adminMode=false;
+  let progress=loadProgress();try{localStorage.removeItem(LEGACY_PROFILE_STORAGE_KEY);}catch(error){}progress.unlocked=Math.min(TEST_STAGE_COUNT,Math.max(1,progress.unlocked));progress.current=Math.min(progress.unlocked-1,Math.max(0,progress.current));
+  // The GO tile is always the first level without a clear record.  Deriving it
+  // from results also repairs saves made before replay-return handling existed.
+  function syncProgressCursor(){
+    const next=Array.from({length:TEST_STAGE_COUNT},(_,index)=>index).find(index=>!progress.results[index]);
+    progress.current=next===undefined?TEST_STAGE_COUNT-1:next;
+    progress.unlocked=next===undefined?TEST_STAGE_COUNT:Math.min(TEST_STAGE_COUNT,next+1);
+  }
+  syncProgressCursor();saveProgress();
+let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
   let game,timerId,startTimeout;
   const key=(index,direction)=>`${index}:${direction}`;
   const pointKey=([row,column])=>`${row},${column}`;
@@ -724,9 +1301,23 @@ let adminMode=false;
   const same=(first,second)=>first.length===second.length&&first.every(value=>second.includes(value));
   const dirTo=([row,column],[nextRow,nextColumn])=>nextRow<row?UP:nextColumn>column?RIGHT:nextRow>row?DOWN:LEFT;
   const inside=(stage,row,column)=>row>=0&&row<stage.rows&&column>=0&&column<stage.cols?row*stage.cols+column:-1;
+  const SOURCE_PORTS={start2a:[LEFT,DOWN],start2b:[LEFT,RIGHT],start3:[LEFT,DOWN,RIGHT],start4:[UP,RIGHT,DOWN,LEFT]};
+  const sourceShapeFor=directions=>{
+    if(directions.length===4)return 'start4';
+    if(directions.length===3)return 'start3';
+    if(directions.length===2)return same(directions,[UP,DOWN])||same(directions,[LEFT,RIGHT])?'start2b':'start2a';
+    return null;
+  };
+  const sourceTargetFor=(shape,directions)=>{
+    if(shape==='start4')return 0;
+    const span=shape==='start2b'?2:4;
+    return Array.from({length:span},(_,rotation)=>rotation).find(rotation=>same(rotate(SOURCE_PORTS[shape],rotation),directions))??0;
+  };
+  const endpointPorts=tile=>tile.sourceShape?rotate(SOURCE_PORTS[tile.sourceShape],tile.rotation):[tile.rotation];
+  const endpointRotationSpan=tile=>tile.sourceShape==='start2b'?2:tile.sourceShape==='start4'?1:4;
 
   function ports(tile){
-    if(tile.type==='endpoint')return [tile.rotation];
+    if(tile.type==='endpoint')return endpointPorts(tile);
     if(tile.type==='straight'||tile.type==='filter')return tile.rotation%2?[RIGHT,LEFT]:[UP,DOWN];
     if(tile.type==='corner')return rotate([UP,RIGHT],tile.rotation);
     if(tile.type==='tee')return rotate([LEFT,RIGHT,DOWN],tile.rotation);
@@ -764,7 +1355,11 @@ let adminMode=false;
   function traverseColor(stage,color,ignoreTClaim=false,fromAllEndpoints=false){
     const endpoints=stage.tiles.map((tile,index)=>tile.type==='endpoint'&&tile.color===color&&(fromAllEndpoints||tile.role==='start')?index:-1).filter(index=>index>=0);
     const visited=new Set(),queue=[];
-    endpoints.forEach(index=>{const state=key(index,stage.tiles[index].rotation);visited.add(state);queue.push([index,stage.tiles[index].rotation]);});
+    endpoints.forEach(index=>{
+      endpointPorts(stage.tiles[index]).forEach(direction=>{
+        const state=key(index,direction);visited.add(state);queue.push([index,direction]);
+      });
+    });
     while(queue.length){
       const [index,direction]=queue.shift();
       neighbors(stage,index,direction,color,ignoreTClaim).forEach(next=>{
@@ -794,11 +1389,23 @@ let adminMode=false;
     stage.tiles.forEach((tile,index)=>{if(tile.type==='endpoint')colorsByTile[index].add(tile.color);});
     return {states,startStates,visualStates,colorsByTile};
   }
+  function sourcePortReachesFinish(stage,color,startIndex,direction){
+    const visited=new Set([key(startIndex,direction)]),queue=[[startIndex,direction]];
+    while(queue.length){
+      const [index,incoming]=queue.shift(),tile=stage.tiles[index];
+      if(index!==startIndex&&tile.type==='endpoint'&&tile.role==='finish'&&tile.color===color)return true;
+      neighbors(stage,index,incoming,color).forEach(next=>{if(!visited.has(next)){visited.add(next);queue.push(next.split(':').map(Number));}});
+    }
+    return false;
+  }
+  function sourcePortsComplete(stage,color=null){
+    return stage.tiles.every((tile,index)=>tile.type!=='endpoint'||tile.role!=='start'||(color&&tile.color!==color)||endpointPorts(tile).every(direction=>sourcePortReachesFinish(stage,tile.color,index,direction)));
+  }
   function isComplete(stage,connections){
-    return stage.tiles.every((tile,index)=>tile.type!=='endpoint'||tile.role!=='finish'||connections.startStates[tile.color].has(key(index,tile.rotation)));
+    return stage.tiles.every((tile,index)=>tile.type!=='endpoint'||tile.role!=='finish'||connections.startStates[tile.color].has(key(index,tile.rotation)))&&sourcePortsComplete(stage);
   }
   function colorIsComplete(stage,connections,color){
-    return stage.tiles.every((tile,index)=>tile.type!=='endpoint'||tile.role!=='finish'||tile.color!==color||connections.startStates[color].has(key(index,tile.rotation)));
+    return stage.tiles.every((tile,index)=>tile.type!=='endpoint'||tile.role!=='finish'||tile.color!==color||connections.startStates[color].has(key(index,tile.rotation)))&&sourcePortsComplete(stage,color);
   }
   // Validates the *solved* graph, not just whether endpoints are connected.
   // A special tile passes only when every one of its intended ports is reached
@@ -806,6 +1413,7 @@ let adminMode=false;
   function validateSpecialUsage(stage){
     const snapshot=stage.tiles.map(tile=>({rotation:tile.rotation,touched:tile.touched,primed:tile.primed,claimedColor:tile.claimedColor,completedColor:tile.completedColor}));
     stage.tiles.forEach(tile=>{
+      if(!tile.required)return;
       tile.rotation=tile.target;
       if(tile.type!=='endpoint'&&tile.type!=='cross'&&tile.type!=='pturn')tile.touched=true;
       tile.primed=true;
@@ -827,12 +1435,12 @@ let adminMode=false;
       specials.push({index,type:tile.type,usedPorts,missingPorts,valid:!missingPorts.length});
     });
     const report={
-      endpointComplete:isComplete(stage,connections),
+      endpointComplete:isComplete(stage,connections),sourcePortsComplete:sourcePortsComplete(stage),
       unusedRequired,
       routeTileCounts,
       shortRoutes,
       specials,
-      valid:isComplete(stage,connections)&&!unusedRequired.length&&!shortRoutes.length&&specials.every(item=>item.valid)
+      valid:isComplete(stage,connections)&&sourcePortsComplete(stage)&&!unusedRequired.length&&!shortRoutes.length&&specials.every(item=>item.valid)
     };
     stage.tiles.forEach((tile,index)=>Object.assign(tile,snapshot[index]));
     return report;
@@ -916,15 +1524,18 @@ let adminMode=false;
     return 0;
   }
   function buildStage(index,variant='identity',templateIndex=0){
-    // 랭킹 공정성을 위해 같은 스테이지는 항상 같은 초기 타일 상태를 사용합니다.
+    // 같은 레벨은 항상 같은 초기 타일 상태를 사용합니다.
     let seed=((index+1)*2654435761+templateIndex*1013904223+variant.length*374761393)>>>0;
     const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
-    const definition=transformedStage(STAGE_TEMPLATES[index][templateIndex],variant),edgeMap=new Map(),specialMap=new Map((definition.specials||[]).filter(item=>item.type!=='filter').map(item=>[pointKey(item.at),item])),preAligned=new Set((definition.preAligned||[]).map(pointKey));
-    definition.paths.forEach(({points})=>{
+    const definition=transformedStage(STAGE_TEMPLATES[index][templateIndex],variant),edgeMap=new Map(),colorEdgeMap=new Map(),specialMap=new Map((definition.specials||[]).filter(item=>item.type!=='filter').map(item=>[pointKey(item.at),item])),preAligned=new Set((definition.preAligned||[]).map(pointKey));
+    definition.paths.forEach(({color,points})=>{
       for(let step=0;step<points.length-1;step++){
         const first=pointKey(points[step]),second=pointKey(points[step+1]);
         if(!edgeMap.has(first))edgeMap.set(first,[]);if(!edgeMap.has(second))edgeMap.set(second,[]);
         edgeMap.get(first).push(dirTo(points[step],points[step+1]));edgeMap.get(second).push(dirTo(points[step+1],points[step]));
+        const colorFirst=`${color}:${first}`,colorSecond=`${color}:${second}`;
+        if(!colorEdgeMap.has(colorFirst))colorEdgeMap.set(colorFirst,[]);if(!colorEdgeMap.has(colorSecond))colorEdgeMap.set(colorSecond,[]);
+        colorEdgeMap.get(colorFirst).push(dirTo(points[step],points[step+1]));colorEdgeMap.get(colorSecond).push(dirTo(points[step+1],points[step]));
       }
     });
     const endpointMap=new Map(definition.endpoints.map(item=>[pointKey(item.at),item]));
@@ -932,7 +1543,9 @@ let adminMode=false;
       const row=Math.floor(index/definition.cols),column=index%definition.cols,point=pointKey([row,column]);
       const endpoint=endpointMap.get(point),special=specialMap.get(point),directions=[...new Set(edgeMap.get(point)||[])];
       if(endpoint){
-        const target=directions[0];return {type:'endpoint',role:endpoint.role,color:endpoint.color,locked:false,target,rotation:target,required:true,touched:false};
+        const endpointDirections=[...new Set(colorEdgeMap.get(`${endpoint.color}:${point}`)||directions)],sourceShape=endpoint.role==='start'?sourceShapeFor(endpointDirections):null;
+        const target=sourceShape?sourceTargetFor(sourceShape,endpointDirections):endpointDirections[0];
+        return {type:'endpoint',role:endpoint.role,color:endpoint.color,locked:false,target,rotation:target,sourceShape,required:true,touched:false};
       }
       if(special){const target=(special.type==='cross'||special.type==='pturn')?0:special.type==='tee'?targetFor('tee',directions):special.type==='filter'?targetFor('filter',directions):dualTargetFor(definition,special.at);return {type:special.type,target,rotation:target,required:true,touched:special.type==='cross'||special.type==='pturn',claimedColor:null,filterColor:special.color};}
       if(directions.length===2){
@@ -943,11 +1556,13 @@ let adminMode=false;
       return {type,target:rotation,rotation,required:false,touched:false};
     });
     tiles.forEach((tile,index)=>{const row=Math.floor(index/definition.cols),column=index%definition.cols;tile.preAligned=preAligned.has(pointKey([row,column]));});
-    const stage={index,variant,templateIndex,rows:definition.rows,cols:definition.cols,tiles,moves:0,locked:true,animating:false,hasPlayerMoved:false,completedColors:new Set(),candidateTiles:new Set(),candidateJustActivated:new Set(),colorKeys:[]};
+    const stage={index,variant,templateIndex,testLabel:definition.testLabel||null,rows:definition.rows,cols:definition.cols,tiles,moves:0,locked:true,animating:false,hasPlayerMoved:false,completedColors:new Set(),candidateTiles:new Set(),candidateJustActivated:new Set(),colorKeys:[]};
     tiles.forEach(tile=>{
       if(tile.type==='cross'||tile.type==='pturn')return;
       if(tile.type==='endpoint'){
-        tile.rotation=tile.role==='start'?tile.target:(tile.target+1+Math.floor(random()*3))%4;
+        tile.rotation=tile.role==='start'&&tile.sourceShape&&tile.sourceShape!=='start4'
+          ?(tile.target+1+Math.floor(random()*(endpointRotationSpan(tile)-1)))%endpointRotationSpan(tile)
+          :tile.role==='start'?tile.target:(tile.target+1+Math.floor(random()*3))%4;
         return;
       }
       const span=tile.type==='straight'||tile.type==='filter'?2:4;
@@ -1012,12 +1627,17 @@ let adminMode=false;
   }
 
   function boardMetrics(){
-    const width=Math.min(window.innerWidth-40,600),height=Math.max(180,window.innerHeight-300);
+    // The playable board must measure itself from the fixed 9:16 canvas, not
+    // from the surrounding letterboxed browser viewport.
+    const content=frame.closest('.game-content');
+    const canvasWidth=content?.clientWidth||gameScreen.clientWidth||window.innerWidth;
+    const canvasHeight=content?.clientHeight||gameScreen.clientHeight||window.innerHeight;
+    const width=Math.min(Math.max(180,canvasWidth),600),height=Math.max(180,canvasHeight-40);
     const reference=Math.min(100,width/4,height/4),size=Math.max(28,Math.min(reference,width/game.cols,height/game.rows));
     return {width:size*game.cols,height:size*game.rows};
   }
   // 회전값과 화면 회전각을 분리합니다. 화면각은 누적해 270° → 360°도 항상 시계 방향으로 보이게 합니다.
-  function angleFor(tile){return tile.type==='endpoint'?((tile.rotation-RIGHT+4)%4)*90:tile.type==='cross'?0:tile.rotation*90;}
+  function angleFor(tile){return tile.type==='endpoint'?(tile.sourceShape?(tile.sourceShape==='start4'?0:tile.rotation*90):((tile.rotation-RIGHT+4)%4)*90):tile.type==='cross'?0:tile.rotation*90;}
   function displayAngle(tile){return Number.isFinite(tile.displayAngle)?tile.displayAngle:angleFor(tile);}
   function roadSvg(tile){
     let path='';
@@ -1030,6 +1650,36 @@ let adminMode=false;
     // 시작/끝: 도로 위에 50% 크기의 흰색 사각 패널을 올리는 레이어 구조입니다.
     else path='<path class="road-path endpoint-path" d="M50 50H101"/>'+'<rect class="endpoint-core" x="25" y="25" width="50" height="50" rx="20"/>';
     return `<svg class="road-svg" viewBox="0 0 100 100" aria-hidden="true"><g class="road-shape" style="transform:rotate(${displayAngle(tile)}deg)">${path}</g></svg>`;
+  }
+  function testTileArt(tile,index,colors,isCandidate){
+    // The supplied 2-way PNG filenames are opposite to their visible ports:
+    // 2_a is straight (left/right), while 2_b is corner (left/down).
+    const lineByType={straight:'line_straight.png',filter:'line_straight.png',corner:'line_curve.png',tee:'line_t.png?v=v0-3-tee-resource-2',cross:'line_start_cross.png',pturn:'line_start_cross.png',dual:'line_two_line.png',endpoint:'line_start_end.png',start2a:'line_start_end_2_b.png',start2b:'line_start_end_2_a.png',start3:'line_start_end_3.png',start4:'line_start_end_4.png'};
+    const blockByColor={green:'block_green.png',blue:'block_blue.png',red:'block_red.png'};
+    const laneColors=tile.type==='dual'?dualLaneColors(tile,index,game.connections).filter(Boolean):[];
+    const solidColor=tile.type==='endpoint'?tile.color:(laneColors[0]||[...colors][0]||tile.completedColor||null);
+    const mixed=tile.type==='dual'&&laneColors.length===2&&laneColors[0]!==laneColors[1];
+    // The block split and the two-line artwork share the same lane order:
+    // lane 0 is the up→right curve and lane 1 is the left→down curve.
+    // Keeping this order is essential after rotation; swapping it makes both
+    // colours appear on the opposite physical lane.
+    const displayLaneColors=laneColors;
+    const base=mixed
+      ?`<img class="test-block-art test-dual-base" src="assets/${blockByColor[displayLaneColors[0]]}" alt=""><img class="test-block-art test-dual-cut" src="assets/${blockByColor[displayLaneColors[1]]}" alt=""><img class="test-block-art test-dual-bottom" src="assets/${blockByColor[displayLaneColors[1]]}" alt="">`
+      :`<img class="test-block-art" src="assets/${tile.type==='cross'||tile.type==='pturn'?'block_black.png':blockByColor[solidColor]||'block_off.png'}" alt="">`;
+    const light=isCandidate?'<img class="test-light-art" src="assets/block_off_light.png" alt="">':'';
+    const lineOpacity=(solidColor||mixed||isCandidate||tile.type==='endpoint'||tile.type==='cross'||tile.type==='pturn')?'':' test-road-off';
+    const startText=tile.type==='endpoint'&&tile.role==='start'?`<img class="test-start-art" src="assets/${tile.color}_text_start.png" alt="">`:'';
+    // Image source-port conventions:
+    // curve = left/down, start-end = left, straight = left/right,
+    // two-line = left/down + up/right. These differ from legacy SVG bases.
+    const artType=tile.type==='endpoint'&&tile.sourceShape?tile.sourceShape:tile.type;
+    const roadAngle=tile.type==='endpoint'?(tile.sourceShape?(tile.sourceShape==='start4'?0:tile.rotation*90):((tile.rotation-LEFT+4)%4)*90)
+      :tile.type==='straight'||tile.type==='filter'?((tile.rotation+1)%2)*90
+      :tile.type==='corner'||tile.type==='dual'?((tile.rotation+2)%4)*90
+      :tile.type==='tee'?tile.rotation*90
+      :0;
+    return `<span class="test-tile-art${mixed?` test-dual-${tile.rotation%2}`:''}">${base}${light}<img class="test-road-art${lineOpacity}" src="assets/${lineByType[artType]}" style="transform:rotate(${roadAngle}deg)" alt="">${startText}</span>`;
   }
   function dualLaneColors(tile,index,connections){
     const lanes=[rotate([UP,RIGHT],tile.rotation),rotate([LEFT,DOWN],tile.rotation)];
@@ -1057,6 +1707,7 @@ let adminMode=false;
   }
   function render(){
     game.connections=resolveConnections(game);
+    const candidateBlinkDelay=-((Date.now()%500));
     const previousCandidates=game.candidateTiles||new Set(),nextCandidates=candidateTiles(game,game.connections);
     const justActivated=game.candidateJustActivated&&game.candidateJustActivated.size
       ?new Set(game.candidateJustActivated)
@@ -1073,7 +1724,8 @@ let adminMode=false;
     });
     game.colorKeys=nextColorKeys;
     const metrics=boardMetrics();
-    stageLabel.innerHTML=`<span class="stage-text">STAGE <span class="stage-number">${pad(game.index+1)}</span></span>`;
+    const episodeStage=stageNumberInEpisode(game.index);
+    stageLabel.innerHTML=game.testMode?`<span class="stage-text">TEST <span class="stage-number">${game.testLabel}</span></span>`:`<span class="stage-text">LEVEL <span class="stage-number">${pad(episodeStage)}</span></span>`;
     restartButton.disabled=Boolean(game.viewer);
     const tileSize=metrics.width/game.cols,tileRadius=Math.round(Math.min(35,Math.max(15,tileSize*.35)));
     frame.style.width=`${metrics.width}px`;frame.style.height=`${metrics.height}px`;
@@ -1084,15 +1736,16 @@ let adminMode=false;
       const isCandidate=game.candidateTiles.has(index);
       const isAllowed=tile.type==='endpoint'||tile.touched||tile.primed||colors.size>0||isCandidate;
       const classes=['tile',tile.type,visualClass(tile,colors)];
+      classes.push('test-art-tile');
       if(tile.type==='endpoint')classes.push('endpoint');
-      if(isCandidate)classes.push('candidate');
+      if(isCandidate){classes.push('candidate');button.style.setProperty('--candidate-blink-delay',`${candidateBlinkDelay}ms`);}
       if(isCandidate&&justActivated.has(index))classes.push('candidate-enter');
       const isCandidateRelease=releasedCandidates.has(index)&&!isCandidate&&!colors.size;
       if(isCandidateRelease)classes.push('candidate-release');
-      if(tile.type!=='cross'&&tile.type!=='pturn'&&isAllowed)classes.push('rotatable');
+      if(tile.type!=='cross'&&tile.type!=='pturn'&&!(tile.type==='endpoint'&&tile.sourceShape==='start4')&&isAllowed)classes.push('rotatable');
       const transition=connectionTransitions.get(index);
       if(transition)classes.push(transition.kind);
-      button.className=classes.join(' ');button.style.setProperty('--order',index);button.style.setProperty('--endpoint-color',COLORS[tile.color]||COLORS.green);
+      button.className=classes.join(' ');button.style.setProperty('--order',index);button.style.setProperty('--endpoint-color',COLORS[tile.color]||COLORS.green);button.style.zIndex=String(Math.floor(index/game.cols)+1);
       if(isCandidateRelease)button.style.setProperty('--candidate-release-to',backgroundForClass(tile,colors));
       if(transition){
         const fromColors=new Set((transition.from||'').split('|').filter(Boolean));
@@ -1100,7 +1753,7 @@ let adminMode=false;
         button.style.setProperty('--from-bg',backgroundForClass(tile,fromColors));
         button.style.setProperty('--to-bg',backgroundForClass(tile,colors));
       }
-      button.disabled=game.locked||tile.type==='cross'||tile.type==='pturn';
+      button.disabled=game.locked||tile.type==='cross'||tile.type==='pturn'||(tile.type==='endpoint'&&tile.sourceShape==='start4');
       if(tile.type==='dual'&&colors.size>1){
         const [laneZero,laneOne]=dualLaneColors(tile,index,game.connections);
         button.style.setProperty('--dual-lane-zero',COLORS[laneZero]||COLORS.green);
@@ -1108,9 +1761,8 @@ let adminMode=false;
         button.style.setProperty('--dual-gradient-direction',dualGradientDirection(tile.rotation));
       }
       button.setAttribute('role','gridcell');
-      button.setAttribute('aria-label',tile.type==='endpoint'?(tile.role==='start'?'Start':'Finish'):tile.type==='tee'?'T junction':tile.type==='dual'?'Dual lane':tile.type==='cross'?'Cross junction':isCandidate?'Available route tile':'Route tile');
-      button.innerHTML=roadSvg(tile);
-      if(tile.type==='endpoint'&&tile.role==='start'){const symbol=document.createElement('span');symbol.className='start-symbol';symbol.textContent='S';symbol.setAttribute('aria-hidden','true');button.append(symbol);}
+      button.setAttribute('aria-label',tile.type==='endpoint'?(tile.role==='start'?(tile.sourceShape?`Start ${endpointPorts(tile).length} way`:'Start'):'Finish'):tile.type==='tee'?'T junction':tile.type==='dual'?'Dual lane':tile.type==='cross'?'Cross junction':isCandidate?'Available route tile':'Route tile');
+      button.innerHTML=testTileArt(tile,index,colors,isCandidate);
       if(!button.disabled)button.addEventListener('click',()=>turn(index));
       board.append(button);
     });
@@ -1128,7 +1780,7 @@ let adminMode=false;
   function turn(index){
     if(game.locked||game.animating)return;
     const tile=game.tiles[index],isEndpoint=tile.type==='endpoint';
-    if(tile.type==='cross'||tile.type==='pturn')return;
+    if(tile.type==='cross'||tile.type==='pturn'||(tile.type==='endpoint'&&tile.sourceShape==='start4'))return;
     const currentColors=game.connections.colorsByTile[index],isCandidate=game.candidateTiles.has(index);
     const isAllowed=isEndpoint||tile.touched||tile.primed||currentColors.size>0||isCandidate;
     if(!isAllowed){lockedJiggle(index);return;}
@@ -1147,51 +1799,131 @@ let adminMode=false;
       tile.touched=true;game.moves++;
     }
     game.hasPlayerMoved=true;
-    const previousAngle=displayAngle(tile);
-    const span=tile.type==='straight'||tile.type==='filter'?2:4;
+    const span=tile.type==='endpoint'?endpointRotationSpan(tile):tile.type==='straight'||tile.type==='filter'?2:4;
     tile.rotation=(tile.rotation+1)%span;
-    tile.displayAngle=previousAngle+90;
-    game.animating=true;
-    const element=board.children[index];
-    element.querySelector('.road-shape').style.transform=`rotate(${tile.displayAngle}deg)`;
-    setTimeout(()=>{
-      game.animating=false;
-      game.connections=resolveConnections(game);
-      const completedTiles=updateCompletedColors(game,game.connections);
-      render();
-      completedTiles.forEach(tileIndex=>board.children[tileIndex]?.classList.add('route-complete-pop'));
-      if(game.moves>=game.maxMoves)over('exhausted');
-      else if(isComplete(game,game.connections))clearStage();
-      else if(hasNoRouteWithinMoves(game))over('no-route');
-    },245);
+    // Swap the route immediately. The tactile feedback is supplied by the tile
+    // itself, so the player gets a crisp click without watching a mid-rotation.
+    tile.displayAngle=undefined;
+    game.connections=resolveConnections(game);
+    const completedTiles=updateCompletedColors(game,game.connections);
+    render();
+    board.children[index]?.classList.add('turn-click');
+    completedTiles.forEach(tileIndex=>board.children[tileIndex]?.classList.add('route-complete-pop'));
+    if(game.moves>=game.maxMoves)over('exhausted');
+    else if(isComplete(game,game.connections))clearStage();
+    else if(hasNoRouteWithinMoves(game))over('no-route');
   }
-  function showGame(){homeScreen.classList.remove('show');gameScreen.classList.remove('hidden');}
-  function showHome(){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');startOverlay.classList.remove('show');resetModal.classList.remove('show');gameScreen.classList.add('hidden');homeScreen.classList.add('show');renderHome();requestAnimationFrame(()=>{const focus=homeStageList.querySelector('.current')||homeStageList.lastElementChild;if(focus)focus.scrollIntoView({block:'center'});});}
+  function showGame(){stageTestScreen.classList.remove('show');designScreen.classList.remove('show');homeScreen.classList.remove('show');gameScreen.classList.remove('hidden');}
+  const episodeForStage=index=>Math.min(EPISODE_COUNT-1,Math.max(0,Math.floor(index/EPISODE_SIZE)));
+  const stageNumberInEpisode=index=>index%EPISODE_SIZE+1;
+  const visibleEpisode=()=>adminMode?(adminEpisode??episodeForStage(progress.current)):(homeEpisode??episodeForStage(progress.current));
+  function showHome(episodeOverride=null){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');startOverlay.classList.remove('show');resetModal.classList.remove('show');stageTestScreen.classList.remove('show');designScreen.classList.remove('show');homeEpisode=Number.isInteger(episodeOverride)?episodeOverride:episodeForStage(progress.current);gameScreen.classList.add('hidden');homeScreen.classList.add('show');renderHome();requestAnimationFrame(()=>{const focus=homeStageList.querySelector('.current')||homeStageList.firstElementChild;if(focus)focus.scrollIntoView({block:'center'});});}
+  function designCard(label,{block='block_off.png',line,text,off=false,light=false,dual=[]}={}){
+    const bases=dual.length?dual.map((asset,index)=>`<img class="design-sample-block design-dual-layer design-dual-layer-${index}" src="assets/${asset}" alt="">`).join('')+`<img class="design-sample-block design-dual-bottom" src="assets/${dual[1]}" alt="">`:`<img class="design-sample-block" src="assets/${block}" alt="">`;
+    const lightLayer=light?'<img class="design-sample-light" src="assets/block_off_light.png" alt="">':'';
+    const lineLayer=line?`<img class="design-overlay design-line${off?' design-off-line':''}" src="assets/${line}" alt="">`:'';
+    const textLayer=text?`<img class="design-overlay design-start-text" src="assets/${text}" alt="">`:'';
+    return `<article class="design-card"><div class="design-sample">${bases}${lightLayer}${lineLayer}${textLayer}</div><p>${label}</p></article>`;
+  }
+  function designGroup(title,cards){return `<section class="design-group"><h2>${title}</h2><div class="design-gallery">${cards.join('')}</div></section>`;}
+  function renderDesignPreview(){
+    const colors=[['RED','block_red.png','red_text_start.png'],['GREEN','block_green.png','green_text_start.png'],['BLUE','block_blue.png','blue_text_start.png']];
+    const colorGroups=colors.map(([name,block,text])=>designGroup(name,[
+      designCard('START 1 WAY',{block,line:'line_start_end.png',text}),designCard('START 2 WAY / CORNER',{block,line:'line_start_end_2_b.png',text}),
+      designCard('START 2 WAY / STRAIGHT',{block,line:'line_start_end_2_a.png',text}),designCard('START 3 WAY',{block,line:'line_start_end_3.png',text}),designCard('START 4 WAY',{block,line:'line_start_end_4.png',text}),designCard('END',{block,line:'line_start_end.png'}),
+      designCard('STRAIGHT',{block,line:'line_straight.png'}),designCard('T JUNCTION',{block,line:'line_t.png?v=v0-3-tee-resource-2'}),designCard('CROSS',{block,line:'line_start_cross.png'}),
+      designCard('TWO LINE',{block,line:'line_two_line.png'}),designCard('CURVE',{block,line:'line_curve.png'})
+    ]));
+    const offGroup=designGroup('INACTIVE',[designCard('STRAIGHT',{line:'line_straight.png',off:true}),designCard('T JUNCTION',{line:'line_t.png?v=v0-3-tee-resource-2',off:true}),designCard('CROSS',{line:'line_start_cross.png',off:true}),designCard('TWO LINE',{line:'line_two_line.png',off:true}),designCard('CURVE',{line:'line_curve.png',off:true})]);
+    const blackGroup=designGroup('BLACK',[designCard('CROSS',{block:'block_black.png',line:'line_start_cross.png'})]);
+    const dualGroup=designGroup('COLOR COMBINATION / TWO LINE',[
+      designCard('RED + GREEN',{line:'line_two_line.png',dual:['block_red.png','block_green.png']}),
+      designCard('RED + BLUE',{line:'line_two_line.png',dual:['block_red.png','block_blue.png']}),
+      designCard('GREEN + BLUE',{line:'line_two_line.png',dual:['block_green.png','block_blue.png']}),
+      designCard('ACTIVE CANDIDATE',{line:'line_curve.png',light:true})
+    ]);
+    designContent.innerHTML=`<p class="design-caption">PARENT BOTTOM-LEFT / CHILD CENTER / X 100 Y 112</p>${colorGroups.join('')}${offGroup}${blackGroup}${dualGroup}`;
+  }
+  function showDesign(){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');startOverlay.classList.remove('show');resetModal.classList.remove('show');gameScreen.classList.add('hidden');homeScreen.classList.remove('show');renderDesignPreview();designScreen.classList.add('show');}
+  function renderStageTests(){
+    const buttons=[];
+    for(let rows=3;rows<=8;rows++)for(let cols=3;cols<=8;cols++)buttons.push(`<button type="button" class="stage-test-size" data-cols="${cols}" data-rows="${rows}">${cols}×${rows}</button>`);
+    stageTestContent.innerHTML=`<div class="stage-test-grid">${buttons.join('')}</div>`;
+    stageTestContent.querySelectorAll('.stage-test-size').forEach(button=>button.addEventListener('click',()=>beginSizeTest(Number(button.dataset.cols),Number(button.dataset.rows))));
+  }
+  function showStageTests(){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');startOverlay.classList.remove('show');resetModal.classList.remove('show');gameScreen.classList.add('hidden');homeScreen.classList.remove('show');designScreen.classList.remove('show');renderStageTests();stageTestScreen.classList.add('show');}
+  function beginSizeTest(cols,rows){const index=TEST_SIZE_STAGE_INDEX.get(`${cols}x${rows}`);if(Number.isInteger(index))begin(index,{test:true});}
+  const starsForGrade=grade=>({Clear:1,Great:2,Perfect:3}[grade]||0);
+  const gradeForStars=stars=>({1:'Clear',2:'Great',3:'Perfect'}[stars]||null);
+  const bestGrade=(existing,next)=>starsForGrade(next)>starsForGrade(existing)?next:(existing||next);
+  function starsMarkup(stars,{animate=false,home=false}={}){
+    const starPath='M50 8C52 8 54 10 55 13L62 31C63 33 65 34 67 34L86 35C90 35 91 40 88 43L73 57C71 58 71 60 72 62L77 81C78 85 73 88 70 86L52 76C51 75 49 75 48 76L30 86C27 88 22 85 23 81L28 62C29 60 29 58 27 57L12 43C9 40 10 35 14 35L33 34C35 34 37 33 38 31L45 13C46 10 48 8 50 8Z';
+    return Array.from({length:stars},(_,index)=>`<svg class="${home?'home-star':'result-star'}${animate?' star-reveal':''}" style="--star-index:${index}" viewBox="0 0 100 100" aria-hidden="true"><path d="${starPath}"/></svg>`).join('');
+  }
+  function stageStarsMarkup(stars){
+    return Array.from({length:stars},(_,index)=>`<img class="stage-star stage-star-${index+1}" src="assets/stage_icon_star.png" alt="">`).join('');
+  }
+  function setHomeToolsVisible(visible){homeScreen.classList.toggle('tools-visible',visible);}
+  function clearHomeToolsHold(){if(homeToolsHoldTimer!==null){clearTimeout(homeToolsHoldTimer);homeToolsHoldTimer=null;}}
+  function startHomeToolsHold(event){
+    if(event.button!==undefined&&event.button!==0)return;
+    if(event.target.closest?.('.home-stage,.home-tools,.reset-modal'))return;
+    clearHomeToolsHold();
+    homeToolsHoldTimer=setTimeout(()=>{setHomeToolsVisible(!homeScreen.classList.contains('tools-visible'));homeToolsHoldTimer=null;},3000);
+  }
   function openHomeStage(index){
     if(!Number.isInteger(index)||index<0||index>=TEST_STAGE_COUNT)return;
+    if(!adminMode&&episodeForStage(index)!==visibleEpisode())return;
     if(adminMode){begin(index);return;}
     const result=progress.results[index];
-    if(result==='Perfect')begin(index,{viewer:true});
-    else if(result==='Clear'||index===progress.current)begin(index);
+    // 퍼펙트(별 3개)는 스테이지 선택 화면에서 최종 완료 상태로 잠급니다.
+    // 별 1~2개 클리어는 더 높은 등급에 도전할 수 있도록 재입장을 허용합니다.
+    if(result==='Perfect')return;
+    if(result==='Great'||result==='Clear')begin(index,{returnToStageSelect:true});
+    else if(index===progress.current)begin(index);
   }
-  function renderHome(){adminModeButton.textContent=adminMode?'BACK':'ADMIN';homeStageList.innerHTML='';for(let index=0;index<TEST_STAGE_COUNT;index++){const result=progress.results[index];const status=adminMode?'current':result==='Perfect'?'perfect':result?'clear':index===progress.current?'current':'locked';const button=document.createElement('button');button.type='button';button.className=`home-stage ${status}`;button.value=String(index);button.disabled=status==='locked';const number=pad(index+1);button.innerHTML=`<span>STAGE ${number}</span>${status==='perfect'?'<strong>PERFECT CLEAR!</strong>':status==='clear'?'<strong>CLEAR!</strong>':''}`;button.onclick=function(){openHomeStage(Number(this.value));};homeStageList.append(button);}}
-  function begin(index,{viewer=false}={}){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');const nextGame=createStage(index,viewer?progress.solutions[index]:null);game=nextGame;showGame();game.viewer=viewer;if(viewer){game.tiles.forEach(tile=>{tile.rotation=tile.target;tile.displayAngle=undefined;if(tile.type!=='endpoint'&&tile.type!=='cross')tile.touched=true;});game.hasPlayerMoved=true;game.locked=true;render();return;}if(!progress.results[index])progress.current=index;saveProgress();startOverlay.innerHTML='<span>LEFT MOVES</span><strong>'+pad(game.maxMoves)+'</strong>';render();startOverlay.classList.remove('show');void startOverlay.offsetWidth;startOverlay.classList.add('show');startTimeout=setTimeout(()=>{startOverlay.classList.remove('show');game.locked=false;render();},1000);}
+  function renderHome(){
+    const episode=visibleEpisode(),start=episode*EPISODE_SIZE,end=start+EPISODE_SIZE;
+    adminModeButton.textContent=adminMode?'BACK':'ADMIN';
+    episodeTitle.innerHTML=`<span class="stage-title-word">STAGE</span><strong class="stage-title-number">${pad(episode+1)}</strong>`;episodeSubtitle.textContent='LEVEL 01–20';
+    episodePrevButton.disabled=episode===0;episodeNextButton.disabled=episode===EPISODE_COUNT-1;
+    homeStageList.innerHTML='';
+    for(let index=start;index<end;index++){
+      const result=progress.results[index],status=adminMode?'admin-current':result?result.toLowerCase():index===progress.current?'current':'locked';
+      const isPerfectLocked=!adminMode&&result==='Perfect',button=document.createElement('button');
+      button.type='button';button.className=`home-stage ${status}`;button.value=String(index);button.disabled=status==='locked'||isPerfectLocked;
+      const number=pad(stageNumberInEpisode(index)),stars=starsForGrade(result),isPlayable=status==='current'||status==='admin-current',art=stars===3?'stage_btn_top_clear.png':result?'stage_btn_clear.png':isPlayable?'stage_btn_play.png':'stage_btn_dim.png';
+      button.setAttribute('aria-label',`Episode ${episode+1}, stage ${number}${stars?`, ${stars} stars`:''}${isPerfectLocked?', perfect complete':''}`);
+      button.innerHTML=`<img class="stage-button-art" src="assets/${art}" alt="">${stars?`<span class="stage-stars stage-stars-${stars}">${stageStarsMarkup(stars)}</span>`:''}${isPlayable?'<span class="stage-go">GO!</span>':''}<span class="home-stage-number">${number}</span>`;
+      button.onclick=function(){openHomeStage(Number(this.value));};homeStageList.append(button);
+    }
+  }
+  function begin(index,{viewer=false,test=false,returnToStageSelect=false}={}){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');const nextGame=createStage(index,viewer?progress.solutions[index]:null);game=nextGame;game.testMode=Boolean(test);game.returnToStageSelect=Boolean(returnToStageSelect);game.returnEpisode=game.returnToStageSelect?episodeForStage(index):null;showGame();game.viewer=viewer;if(viewer){game.tiles.forEach(tile=>{tile.rotation=tile.target;tile.displayAngle=undefined;if(tile.type!=='endpoint'&&tile.type!=='cross')tile.touched=true;});game.hasPlayerMoved=true;game.locked=true;render();return;}if(!test)saveProgress();startOverlay.innerHTML='<span>LEFT MOVES</span><strong>'+pad(game.maxMoves)+'</strong>';render();startOverlay.classList.remove('show');void startOverlay.offsetWidth;startOverlay.classList.add('show');startTimeout=setTimeout(()=>{startOverlay.classList.remove('show');game.locked=false;render();},1000);}
   function clearGrade(){return game.moves<=game.perfectMoves?'Perfect':game.moves<=game.greatMoves?'Great':'Clear';}
-  function clearStage(){game.locked=true;game.grade=clearGrade();progress.solutions[game.index]={templateIndex:game.templateIndex,variant:game.variant};progress.results[game.index]=game.grade==='Perfect'?'Perfect':(progress.results[game.index]||'Clear');if(game.grade==='Perfect')progress.results[game.index]='Perfect';progress.unlocked=Math.min(TEST_STAGE_COUNT,Math.max(progress.unlocked,game.index+2));progress.current=Math.min(TEST_STAGE_COUNT-1,game.index+1);saveProgress();clearInterval(timerId);render();[...board.children].forEach(tile=>tile.classList.add('clear-pop'));setTimeout(()=>showModal(true),420);}
+  function clearStage(){game.locked=true;game.grade=clearGrade();clearInterval(timerId);if(game.testMode){render();[...board.children].forEach(tile=>tile.classList.add('clear-pop'));setTimeout(()=>showModal(true),420);return;}progress.solutions[game.index]={templateIndex:game.templateIndex,variant:game.variant};progress.results[game.index]=bestGrade(progress.results[game.index],game.grade);syncProgressCursor();saveProgress();render();[...board.children].forEach(tile=>tile.classList.add('clear-pop'));setTimeout(()=>showModal(true),420);}
   function over(reason){game.locked=true;clearInterval(timerId);showModal(false,reason);}
   function showModal(cleared,reason){
-    if(cleared){const labels={Perfect:'PERFECT!',Great:'GREAT!',Clear:'CLEAR!'};modalKicker.textContent=game.grade.toUpperCase();modalTitle.textContent=labels[game.grade];modalText.textContent=`${pad(game.moves)} Moves · Perfect ${pad(game.perfectMoves)} Moves`;}
-    else{modalKicker.textContent='TRY AGAIN';modalTitle.textContent='GAME OVER';modalText.textContent=reason==='no-route'?'남은 Move로 길을 완성할 수 없어요.':reason==='exhausted'?'Move limit reached.':'Try a different route.';}
-    const nextIndex=Math.min(game.index+1,TEST_STAGE_COUNT-1);
-    modalButton.textContent=cleared?(game.index===TEST_STAGE_COUNT-1?'HOME':'NEXT STAGE'):'RESTART';
-    modalButton.onclick=()=>cleared&&game.index===TEST_STAGE_COUNT-1?showHome():begin(cleared?nextIndex:game.index);modal.classList.add('show');
+    if(cleared){const labels={Perfect:'PERFECT!',Great:'GREAT!',Clear:'CLEAR!'};modalKicker.textContent=game.grade.toUpperCase();modalTitle.textContent=labels[game.grade];modalStars.innerHTML=starsMarkup(starsForGrade(game.grade),{animate:true});modalText.textContent=`${pad(game.moves)} Moves · Perfect ${pad(game.perfectMoves)} Moves`;}
+    else{modalKicker.textContent='TRY AGAIN';modalTitle.textContent='GAME OVER';modalStars.innerHTML='';modalText.textContent=reason==='no-route'?'남은 Move로 길을 완성할 수 없어요.':reason==='exhausted'?'Move limit reached.':'Try a different route.';}
+    if(game.testMode){modalButton.textContent=cleared?'BACK TO TESTS':'RESTART';modalButton.onclick=()=>cleared?showStageTests():begin(game.index,{test:true});modal.classList.add('show');return;}
+    const nextIndex=Math.min(game.index+1,TEST_STAGE_COUNT-1),nextIsEpisode=game.index<TEST_STAGE_COUNT-1&&stageNumberInEpisode(game.index)===EPISODE_SIZE;
+    modalButton.textContent=cleared?(game.returnToStageSelect?'STAGE SELECT':game.index===TEST_STAGE_COUNT-1?'HOME':nextIsEpisode?'NEXT EPISODE':'NEXT STAGE'):'RESTART';
+    modalButton.onclick=()=>cleared&&game.returnToStageSelect?showHome(game.returnEpisode):cleared&&game.index===TEST_STAGE_COUNT-1?showHome():begin(cleared?nextIndex:game.index);modal.classList.add('show');
   }
   homeButton.addEventListener('click',showHome);
-  adminModeButton.addEventListener('click',()=>{adminMode=!adminMode;renderHome();});
+  designTestButton.addEventListener('click',showDesign);
+  designBackButton.addEventListener('click',showHome);
+  stageTestButton.addEventListener('click',showStageTests);
+  stageTestBackButton.addEventListener('click',showHome);
+  adminModeButton.addEventListener('click',()=>{adminMode=!adminMode;adminEpisode=adminMode?episodeForStage(progress.current):null;homeEpisode=adminMode?homeEpisode:episodeForStage(progress.current);renderHome();});
+  episodePrevButton.addEventListener('click',()=>{if(adminMode&&adminEpisode>0){adminEpisode--;renderHome();}else if(!adminMode&&homeEpisode>0){homeEpisode--;renderHome();}});
+  episodeNextButton.addEventListener('click',()=>{if(adminMode&&adminEpisode<EPISODE_COUNT-1){adminEpisode++;renderHome();}else if(!adminMode&&homeEpisode<EPISODE_COUNT-1){homeEpisode++;renderHome();}});
   resetProgressButton.addEventListener('click',()=>resetModal.classList.add('show'));
   resetNoButton.addEventListener('click',()=>resetModal.classList.remove('show'));
   resetYesButton.addEventListener('click',()=>{progress=initialProgress();try{localStorage.removeItem(STORAGE_KEY);}catch(error){}saveProgress();resetModal.classList.remove('show');renderHome();});
-  restartButton.addEventListener('click',()=>{if(game&&!game.viewer)begin(game.index);});
+  homeScreen.addEventListener('pointerdown',startHomeToolsHold);
+  ['pointerup','pointercancel','pointerleave'].forEach(type=>homeScreen.addEventListener(type,clearHomeToolsHold));
+  restartButton.addEventListener('click',()=>{if(game&&!game.viewer)begin(game.index,{test:game.testMode});});
   window.addEventListener('resize',()=>{if(game&&!homeScreen.classList.contains('show'))render();});
   // Development-only audit hook: callable from the browser console when authoring stages.
   window.__linePuzzleValidateCampaign=validateCampaign;

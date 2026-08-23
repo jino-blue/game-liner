@@ -1,0 +1,3 @@
+@font-face{font-family:"LINE Regular";src:url("assets/LINERegular.ttf") format("truetype");font-style:normal;font-weight:400;font-display:swap}
+.stage-badge .episode-label{display:block;margin:0 0 3px;font-size:.54em;font-weight:950;letter-spacing:.12em;opacity:.82}
+.home-header h1,.stage-title-word{font-family:"LINE Regular","Malgun Gothic",sans-serif;font-weight:400}.stage-title-number{font-family:"LINE Bold","Malgun Gothic",sans-serif;font-weight:950}.episode-subtitle{transform:translate(-50%,50%)}

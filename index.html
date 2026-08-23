@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>라인 연결 퍼즐</title>
-  <link rel="stylesheet" href="styles.css?v=v0-3-ios-center">
+  <link rel="stylesheet" href="styles.css?v=v0-3-stage-grid">
+  <link rel="stylesheet" href="stage-select.css?v=v0-4-stage-number-shadow-1">
+  <link rel="stylesheet" href="stage-select-fix.css?v=v0-4-pipe-network-reset-2">
+  <link rel="stylesheet" href="episode.css?v=v0-4-level-anchor-font-1">
 </head>
 <body>
   <main class="game-shell" id="gameScreen">
@@ -32,14 +35,24 @@
       </article>
     </footer>
     <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="modal-card"><p class="modal-kicker" id="modalKicker">PERFECT</p><h1 id="modalTitle">PERFECT!</h1><p id="modalText"></p><button class="modal-button" id="modalButton" type="button">NEXT STAGE</button></div>
+      <div class="modal-card"><p class="modal-kicker" id="modalKicker">PERFECT</p><h1 id="modalTitle">PERFECT!</h1><div class="modal-stars" id="modalStars" aria-label="획득 별"></div><p id="modalText"></p><button class="modal-button" id="modalButton" type="button">NEXT STAGE</button></div>
     </div>
   </main>
   <section class="home-screen" id="homeScreen" aria-label="Stage home">
-    <header class="home-header"><button class="reset-progress-button" id="resetProgressButton" type="button">RESET</button><button class="admin-mode-button" id="adminModeButton" type="button">ADMIN</button><h1>STAGES</h1><p>YOUR PATH</p></header>
+    <header class="home-header"><button class="episode-nav episode-prev" id="episodePrevButton" type="button" aria-label="Previous stage"><img src="assets/stage_btn_next_arrow.png" alt=""></button><h1 id="episodeTitle"><span class="stage-title-word">STAGE</span><strong class="stage-title-number">01</strong></h1><button class="episode-nav episode-next" id="episodeNextButton" type="button" aria-label="Next stage"><img src="assets/stage_btn_next_arrow.png" alt=""></button></header>
+    <p class="episode-subtitle" id="episodeSubtitle">LEVEL 01–20</p>
     <div class="stage-list" id="homeStageList"></div>
+    <nav class="home-tools" aria-label="Stage tools"><button class="reset-progress-button" id="resetProgressButton" type="button">RESET</button><button class="admin-mode-button" id="adminModeButton" type="button">ADMIN</button><button class="design-test-button" id="designTestButton" type="button">BLOCK DESIGN</button><button class="stage-test-button" id="stageTestButton" type="button">STAGE TEST</button></nav>
     <div class="reset-modal" id="resetModal" role="dialog" aria-modal="true" aria-labelledby="resetTitle"><div class="reset-card"><h2 id="resetTitle">RESET STAGES?</h2><p>모든 스테이지 정보가 초기화 됩니다.<br>초기화 하시겠습니까?</p><div><button id="resetNoButton" type="button">NO</button><button id="resetYesButton" type="button">YES</button></div></div></div>
   </section>
-  <script src="game.js?v=v0-3-late-stage-dispersed"></script>
+  <section class="design-screen" id="designScreen" aria-label="Block design preview">
+    <header class="design-header"><button class="design-back-button" id="designBackButton" type="button" aria-label="Back to stages">BACK</button><h1>BLOCK DESIGN</h1></header>
+    <main class="design-content" id="designContent"></main>
+  </section>
+  <section class="stage-test-screen" id="stageTestScreen" aria-label="Board size stage tests">
+    <header class="stage-test-header"><button class="stage-test-back-button" id="stageTestBackButton" type="button">BACK</button><h1>STAGE TEST</h1><p>SELECT BOARD SIZE</p></header>
+    <main class="stage-test-content" id="stageTestContent"></main>
+  </section>
+  <script src="game.js?v=v0-6-network-remix-1"></script>
 </body>
 </html>
