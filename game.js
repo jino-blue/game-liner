@@ -9,7 +9,7 @@
   const board=$('#board'),frame=$('#boardFrame'),stageLabel=$('#stageLabel'),homeButton=$('#homeButton'),gameScreen=$('#gameScreen'),homeScreen=$('#homeScreen'),homeStageList=$('#homeStageList'),resetProgressButton=$('#resetProgressButton'),resetModal=$('#resetModal'),resetNoButton=$('#resetNoButton'),resetYesButton=$('#resetYesButton'),adminModeButton=$('#adminModeButton');
   const moveCard=$('#moveCard'),moveGradeLabel=$('#moveGradeLabel'),moveUsed=$('#moveUsed'),moveTarget=$('#moveTarget');
   const startOverlay=$('#startOverlay'),restartButton=$('#restartButton');  const modal=$('#modal'),modalTitle=$('#modalTitle'),modalKicker=$('#modalKicker'),modalStars=$('#modalStars'),modalText=$('#modalText'),modalButton=$('#modalButton');
-  const episodeTitle=$('#episodeTitle'),episodeSubtitle=$('#episodeSubtitle'),episodePrevButton=$('#episodePrevButton'),episodeNextButton=$('#episodeNextButton');
+  const episodeTitle=$('#episodeTitle'),episodePrevButton=$('#episodePrevButton'),episodeNextButton=$('#episodeNextButton');
   const designScreen=$('#designScreen'),designTestButton=$('#designTestButton'),designBackButton=$('#designBackButton');
   const designContent=$('#designContent');
   const stageTestScreen=$('#stageTestScreen'),stageTestButton=$('#stageTestButton'),stageTestBackButton=$('#stageTestBackButton'),stageTestContent=$('#stageTestContent');
@@ -1071,6 +1071,21 @@
     {at:[0,0],role:'start',color:'blue'},{at:[0,5],role:'finish',color:'blue'},{at:[2,6],role:'finish',color:'blue'},
     {at:[6,0],role:'start',color:'red'},{at:[6,4],role:'finish',color:'red'},{at:[6,5],role:'finish',color:'red'}
   ]);
+  // Level 53: a compact three-colour network.  The red route crosses the
+  // blue trunk, then forks through its own T instead of climbing one edge.
+  // D3 is a genuine two-lane crossing: green uses up→right and blue left→down.
+  const makeLevel53Network=()=>makeNetwork(6,6,[
+    {color:'green',points:[[0,2],[1,2],[2,2],[2,3],[1,3],[0,3]]},
+    {color:'green',points:[[2,3],[2,4],[2,5],[3,5]]},
+    {color:'blue',points:[[2,0],[2,1],[2,2],[3,2],[4,2],[5,2]]},
+    {color:'blue',points:[[2,1],[1,1],[0,1]]},
+    {color:'red',points:[[5,0],[4,0],[3,0],[3,1],[3,2],[3,3],[3,4],[2,4],[1,4],[0,4]]},
+    {color:'red',points:[[3,3],[4,3],[4,4],[5,4]]}
+  ],[
+    {at:[0,2],role:'start',color:'green'},{at:[0,3],role:'finish',color:'green'},{at:[3,5],role:'finish',color:'green'},
+    {at:[2,0],role:'start',color:'blue'},{at:[5,2],role:'finish',color:'blue'},{at:[0,1],role:'finish',color:'blue'},
+    {at:[5,0],role:'start',color:'red'},{at:[0,4],role:'finish',color:'red'},{at:[5,4],role:'finish',color:'red'}
+  ],[{at:[2,2],type:'dual'}]);
   const episodeThree=applyStartProgression(episodeThreeSeeds.map((stage,index)=>reframeStage(stage,index+40)),40);
   // Stage 03 / Level 12: three colour networks occupy separate regions and
   // meet at one readable central cross; no colour finishes as a top-edge row.
@@ -1085,6 +1100,7 @@
     {at:[0,5],role:'start',color:'blue'},{at:[3,0],role:'finish',color:'blue'},{at:[5,2],role:'finish',color:'blue'},
     {at:[2,2],role:'start',color:'red'},{at:[0,1],role:'finish',color:'red'},{at:[0,2],role:'finish',color:'red'}
   ]);
+  episodeThree[12]=makeLevel53Network();
   // Stage 03 / Level 18: pull the blue source into D3, place a green goal at
   // C3, and send the red network through the left half of the board.  This
   // avoids the former top-right cluster and makes the whole 7×7 board matter.
@@ -1508,8 +1524,94 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
       ...definition,
       paths:definition.paths.map(path=>({...path,points:path.points.map(point=>transformPoint(point,definition,variant))})),
       endpoints:definition.endpoints.map(endpoint=>({...endpoint,at:transformPoint(endpoint.at,definition,variant)})),
-      specials:(definition.specials||[]).map(special=>({...special,at:transformPoint(special.at,definition,variant)}))
+      specials:(definition.specials||[]).map(special=>({...special,at:transformPoint(special.at,definition,variant)})),
+      preAligned:(definition.preAligned||[]).map(point=>transformPoint(point,definition,variant))
     };
+  }
+  // A board only needs to include the smallest outer rectangle that contains
+  // its authored route data.  Cropping these completely unused edge rows or
+  // columns keeps every path, tile, rotation and solution exactly the same.
+  function trimUnusedBorder(definition){
+    const used=[];
+    definition.paths.forEach(path=>used.push(...path.points));
+    definition.endpoints.forEach(endpoint=>used.push(endpoint.at));
+    (definition.specials||[]).forEach(special=>used.push(special.at));
+    (definition.preAligned||[]).forEach(point=>used.push(point));
+    if(!used.length)return definition;
+    const top=Math.min(...used.map(([row])=>row)),bottom=Math.max(...used.map(([row])=>row));
+    const left=Math.min(...used.map(([,column])=>column)),right=Math.max(...used.map(([,column])=>column));
+    if(top===0&&left===0&&bottom===definition.rows-1&&right===definition.cols-1)return definition;
+    const trimPoint=([row,column])=>[row-top,column-left];
+    return {
+      ...definition,
+      rows:bottom-top+1,
+      cols:right-left+1,
+      paths:definition.paths.map(path=>({...path,points:path.points.map(trimPoint)})),
+      endpoints:definition.endpoints.map(endpoint=>({...endpoint,at:trimPoint(endpoint.at)})),
+      specials:(definition.specials||[]).map(special=>({...special,at:trimPoint(special.at)})),
+      preAligned:(definition.preAligned||[]).map(trimPoint)
+    };
+  }
+  // Remove an internal row or column only when it is pure route padding:
+  // every occupied cell is one color's ordinary straight-through segment.
+  // Starts, finishes, junctions, turns and shared tiles always keep the line.
+  function compactStraightExtensionLines(definition){
+    const copyPoint=point=>[point[0],point[1]];
+    const hasPinnedPoint=(axis,line)=>[
+      ...definition.endpoints.map(item=>item.at),
+      ...(definition.specials||[]).map(item=>item.at),
+      ...(definition.preAligned||[])
+    ].some(point=>point[axis]===line);
+    const lineIsStraightPadding=(axis,line)=>{
+      if(hasPinnedPoint(axis,line))return false;
+      const crossings=new Map();let occupied=0,valid=true;
+      definition.paths.forEach(path=>{
+        path.points.forEach((point,index)=>{
+          if(point[axis]!==line)return;
+          occupied++;
+          const pointId=pointKey(point);crossings.set(pointId,(crossings.get(pointId)||0)+1);
+          const previous=path.points[index-1],next=path.points[index+1],otherAxis=axis===0?1:0;
+          const crossesLine=previous&&next&&(
+            (previous[axis]===line-1&&next[axis]===line+1)||
+            (previous[axis]===line+1&&next[axis]===line-1)
+          );
+          if(!crossesLine||previous[otherAxis]!==point[otherAxis]||next[otherAxis]!==point[otherAxis])valid=false;
+        });
+      });
+      return occupied>0&&valid&&[...crossings.values()].every(count=>count===1);
+    };
+    const removeLine=(axis,line)=>{
+      const shiftPoint=point=>{
+        const shifted=copyPoint(point);
+        if(shifted[axis]>line)shifted[axis]--;
+        return shifted;
+      };
+      const reshapePath=path=>({...path,points:path.points.filter(point=>point[axis]!==line).map(shiftPoint)});
+      return {
+        ...definition,
+        rows:definition.rows-(axis===0?1:0),cols:definition.cols-(axis===1?1:0),
+        paths:definition.paths.map(reshapePath),
+        endpoints:definition.endpoints.map(item=>({...item,at:shiftPoint(item.at)})),
+        specials:(definition.specials||[]).map(item=>({...item,at:shiftPoint(item.at)})),
+        preAligned:(definition.preAligned||[]).map(shiftPoint)
+      };
+    };
+    let compacted=definition,changed=true;
+    while(changed){
+      changed=false;
+      for(const axis of [1,0]){
+        const size=axis===1?compacted.cols:compacted.rows;
+        if(size<=3)continue;
+        // Rebind the predicate to the current post-removal definition.
+        definition=compacted;
+        for(let line=1;line<size-1;line++){
+          if(!lineIsStraightPadding(axis,line))continue;
+          compacted=removeLine(axis,line);changed=true;break;
+        }
+        if(changed)break;
+      }
+    }
+    return compacted;
   }
   function dualTargetFor(definition,at){
     const pairs=definition.paths.map(path=>{
@@ -1527,7 +1629,7 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
     // 같은 레벨은 항상 같은 초기 타일 상태를 사용합니다.
     let seed=((index+1)*2654435761+templateIndex*1013904223+variant.length*374761393)>>>0;
     const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
-    const definition=transformedStage(STAGE_TEMPLATES[index][templateIndex],variant),edgeMap=new Map(),colorEdgeMap=new Map(),specialMap=new Map((definition.specials||[]).filter(item=>item.type!=='filter').map(item=>[pointKey(item.at),item])),preAligned=new Set((definition.preAligned||[]).map(pointKey));
+    const definition=trimUnusedBorder(compactStraightExtensionLines(trimUnusedBorder(transformedStage(STAGE_TEMPLATES[index][templateIndex],variant)))),edgeMap=new Map(),colorEdgeMap=new Map(),specialMap=new Map((definition.specials||[]).filter(item=>item.type!=='filter').map(item=>[pointKey(item.at),item])),preAligned=new Set((definition.preAligned||[]).map(pointKey));
     definition.paths.forEach(({color,points})=>{
       for(let step=0;step<points.length-1;step++){
         const first=pointKey(points[step]),second=pointKey(points[step+1]);
@@ -1724,8 +1826,7 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
     });
     game.colorKeys=nextColorKeys;
     const metrics=boardMetrics();
-    const episodeStage=stageNumberInEpisode(game.index);
-    stageLabel.innerHTML=game.testMode?`<span class="stage-text">TEST <span class="stage-number">${game.testLabel}</span></span>`:`<span class="stage-text">LEVEL <span class="stage-number">${pad(episodeStage)}</span></span>`;
+    stageLabel.innerHTML=game.testMode?`<span class="stage-text">TEST <span class="stage-number">${game.testLabel}</span></span>`:`<span class="stage-text">LEVEL <span class="stage-number">${pad(game.index+1)}</span></span>`;
     restartButton.disabled=Boolean(game.viewer);
     const tileSize=metrics.width/game.cols,tileRadius=Math.round(Math.min(35,Math.max(15,tileSize*.35)));
     frame.style.width=`${metrics.width}px`;frame.style.height=`${metrics.height}px`;
@@ -1885,15 +1986,15 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
   function renderHome(){
     const episode=visibleEpisode(),start=episode*EPISODE_SIZE,end=start+EPISODE_SIZE;
     adminModeButton.textContent=adminMode?'BACK':'ADMIN';
-    episodeTitle.innerHTML=`<span class="stage-title-word">STAGE</span><strong class="stage-title-number">${pad(episode+1)}</strong>`;episodeSubtitle.textContent='LEVEL 01–20';
+    episodeTitle.innerHTML=`<span class="stage-title-word">LEVEL</span><strong class="stage-title-number">${pad(start+1)}-${pad(end)}</strong>`;
     episodePrevButton.disabled=episode===0;episodeNextButton.disabled=episode===EPISODE_COUNT-1;
     homeStageList.innerHTML='';
     for(let index=start;index<end;index++){
       const result=progress.results[index],status=adminMode?'admin-current':result?result.toLowerCase():index===progress.current?'current':'locked';
       const isPerfectLocked=!adminMode&&result==='Perfect',button=document.createElement('button');
       button.type='button';button.className=`home-stage ${status}`;button.value=String(index);button.disabled=status==='locked'||isPerfectLocked;
-      const number=pad(stageNumberInEpisode(index)),stars=starsForGrade(result),isPlayable=status==='current'||status==='admin-current',art=stars===3?'stage_btn_top_clear.png':result?'stage_btn_clear.png':isPlayable?'stage_btn_play.png':'stage_btn_dim.png';
-      button.setAttribute('aria-label',`Episode ${episode+1}, stage ${number}${stars?`, ${stars} stars`:''}${isPerfectLocked?', perfect complete':''}`);
+      const number=pad(index+1),stars=starsForGrade(result),isPlayable=status==='current'||status==='admin-current',art=stars===3?'stage_btn_top_clear.png':result?'stage_btn_clear.png':isPlayable?'stage_btn_play.png':'stage_btn_dim.png';
+      button.setAttribute('aria-label',`Level ${number}${stars?`, ${stars} stars`:''}${isPerfectLocked?', perfect complete':''}`);
       button.innerHTML=`<img class="stage-button-art" src="assets/${art}" alt="">${stars?`<span class="stage-stars stage-stars-${stars}">${stageStarsMarkup(stars)}</span>`:''}${isPlayable?'<span class="stage-go">GO!</span>':''}<span class="home-stage-number">${number}</span>`;
       button.onclick=function(){openHomeStage(Number(this.value));};homeStageList.append(button);
     }
@@ -1907,7 +2008,7 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
     else{modalKicker.textContent='TRY AGAIN';modalTitle.textContent='GAME OVER';modalStars.innerHTML='';modalText.textContent=reason==='no-route'?'남은 Move로 길을 완성할 수 없어요.':reason==='exhausted'?'Move limit reached.':'Try a different route.';}
     if(game.testMode){modalButton.textContent=cleared?'BACK TO TESTS':'RESTART';modalButton.onclick=()=>cleared?showStageTests():begin(game.index,{test:true});modal.classList.add('show');return;}
     const nextIndex=Math.min(game.index+1,TEST_STAGE_COUNT-1),nextIsEpisode=game.index<TEST_STAGE_COUNT-1&&stageNumberInEpisode(game.index)===EPISODE_SIZE;
-    modalButton.textContent=cleared?(game.returnToStageSelect?'STAGE SELECT':game.index===TEST_STAGE_COUNT-1?'HOME':nextIsEpisode?'NEXT EPISODE':'NEXT STAGE'):'RESTART';
+    modalButton.textContent=cleared?(game.returnToStageSelect?'LEVEL SELECT':game.index===TEST_STAGE_COUNT-1?'HOME':nextIsEpisode?'NEXT LEVELS':'NEXT LEVEL'):'RESTART';
     modalButton.onclick=()=>cleared&&game.returnToStageSelect?showHome(game.returnEpisode):cleared&&game.index===TEST_STAGE_COUNT-1?showHome():begin(cleared?nextIndex:game.index);modal.classList.add('show');
   }
   homeButton.addEventListener('click',showHome);
