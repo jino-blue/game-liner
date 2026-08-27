@@ -5,6 +5,7 @@
   const DELTAS=[[-1,0],[0,1],[1,0],[0,-1]], OPP=[DOWN,LEFT,UP,RIGHT];
   const COLORS={green:'#79bd74',blue:'#7597bb',red:'#d76767',mixed:'#84796e'};
   const PATH_COLORS=['green','blue','red'];
+  const ROUTE_FILL_MS=180;
   const $=selector=>document.querySelector(selector);
   const board=$('#board'),frame=$('#boardFrame'),stageLabel=$('#stageLabel'),homeButton=$('#homeButton'),gameScreen=$('#gameScreen'),homeScreen=$('#homeScreen'),homeStageList=$('#homeStageList'),resetProgressButton=$('#resetProgressButton'),resetModal=$('#resetModal'),resetNoButton=$('#resetNoButton'),resetYesButton=$('#resetYesButton'),adminModeButton=$('#adminModeButton');
   const moveCard=$('#moveCard'),moveGradeLabel=$('#moveGradeLabel'),moveUsed=$('#moveUsed'),moveTarget=$('#moveTarget');
@@ -1086,6 +1087,41 @@
     {at:[2,0],role:'start',color:'blue'},{at:[5,2],role:'finish',color:'blue'},{at:[0,1],role:'finish',color:'blue'},
     {at:[5,0],role:'start',color:'red'},{at:[0,4],role:'finish',color:'red'},{at:[5,4],role:'finish',color:'red'}
   ],[{at:[2,2],type:'dual'}]);
+  const makeLevel40Network=()=>makeNetwork(6,6,[
+    {color:'green',points:[[5,1],[4,1],[3,1],[2,1],[1,1],[0,1]]},
+    {color:'green',points:[[3,1],[3,2],[3,3],[2,3],[1,3],[0,3]]},
+    {color:'green',points:[[3,3],[3,4],[4,4],[5,4]]},
+    {color:'blue',points:[[0,5],[1,5],[2,5],[2,4],[2,3],[2,2],[2,1],[2,0]]}
+  ],[
+    {at:[5,1],role:'start',color:'green'},{at:[0,1],role:'finish',color:'green'},{at:[0,3],role:'finish',color:'green'},{at:[5,4],role:'finish',color:'green'},
+    {at:[0,5],role:'start',color:'blue'},{at:[2,0],role:'finish',color:'blue'}
+  ]);
+  const makeLevel27Network=()=>makeNetwork(6,6,[
+    {color:'green',points:[[5,0],[4,0],[3,0],[3,1],[3,2],[2,2],[1,2],[0,2]]},
+    {color:'green',points:[[3,2],[3,3],[4,3],[5,3]]},
+    {color:'blue',points:[[0,5],[1,5],[2,5],[2,4],[2,3],[2,2],[2,1],[2,0]]},
+    {color:'blue',points:[[2,4],[1,4],[0,4]]}
+  ],[
+    {at:[5,0],role:'start',color:'green'},{at:[0,2],role:'finish',color:'green'},{at:[5,3],role:'finish',color:'green'},
+    {at:[0,5],role:'start',color:'blue'},{at:[2,0],role:'finish',color:'blue'},{at:[0,4],role:'finish',color:'blue'}
+  ]);
+  const makeLevel36Network=()=>makeNetwork(6,6,[
+    {color:'green',points:[[0,2],[1,2],[2,2],[2,3],[1,3],[0,3]]},
+    {color:'green',points:[[2,3],[2,4],[3,4],[4,4],[5,4]]},
+    {color:'blue',points:[[2,0],[2,1],[2,2],[3,2],[4,2],[5,2]]},
+    {color:'blue',points:[[2,1],[1,1],[0,1]]}
+  ],[
+    {at:[0,2],role:'start',color:'green'},{at:[0,3],role:'finish',color:'green'},{at:[5,4],role:'finish',color:'green'},
+    {at:[2,0],role:'start',color:'blue'},{at:[5,2],role:'finish',color:'blue'},{at:[0,1],role:'finish',color:'blue'}
+  ],[{at:[2,2],type:'dual'}]);
+  const makeLevel32Network=()=>makeNetwork(6,6,[
+    {color:'green',points:[[5,5],[4,5],[4,4],[3,4],[2,4],[1,4],[0,4]]},
+    {color:'green',points:[[3,4],[3,3],[3,2],[4,2],[5,2]]},
+    {color:'blue',points:[[0,3],[1,3],[2,3],[3,3],[4,3],[5,3]]}
+  ],[
+    {at:[5,5],role:'start',color:'green'},{at:[0,4],role:'finish',color:'green'},{at:[5,2],role:'finish',color:'green'},
+    {at:[0,3],role:'start',color:'blue'},{at:[5,3],role:'finish',color:'blue'}
+  ]);
   const episodeThree=applyStartProgression(episodeThreeSeeds.map((stage,index)=>reframeStage(stage,index+40)),40);
   // Stage 03 / Level 12: three colour networks occupy separate regions and
   // meet at one readable central cross; no colour finishes as a top-edge row.
@@ -1273,6 +1309,23 @@
     });
     return {...definition,endpoints:endpointList,paths};
   };
+  // Replace one member of every high- and medium-similarity pair with a
+  // different network archetype.  The choices deliberately vary branching,
+  // crossings, colour count and route direction while keeping difficulty in
+  // the appropriate 20-level band.
+  episodeOne[7]=reframeStage(withNetworkBranch(makeCenteredForkD('green'),'green',[1,3],[0,3]),7);
+  episodeOne[9]=reframeStage(makeEpisodeOnePairA('green','blue'),9);
+  episodeOne[13]=reframeStage(makeEpisodeOnePairF('red','green'),13);
+  episodeOne[18]=reframeStage(withNetworkBranch(makeEpisodeOneCrossA('green','blue'),'blue',[2,1],[1,1]),18);
+  episodeOne[19]=reframeStage(makeEpisodeOneCrossC('blue','red'),19);
+  episodeTwo[1]=reframeStage(withNetworkBranch(makeTwoCrossMesh('red','blue'),'red',[2,4],[2,5]),21);
+  episodeTwo[6]=makeLevel27Network();
+  episodeTwo[11]=makeLevel32Network();
+  episodeTwo[15]=makeLevel36Network();
+  episodeTwo[19]=makeLevel40Network();
+  episodeThree[4]=reframeStage(makeFinalCrown('green','red','blue'),44);
+  episodeThree[10]=reframeStage(makeFinalSwitchboard('red','blue','green'),50);
+  episodeThree[18]=reframeStage(makeAdvancedSpiral('blue','green','red'),58);
   STAGES.splice(0,STAGES.length,...[...episodeOne,...episodeTwo,...episodeThree]
     .map(disperseFinishClusters)
     .map(addTurnsToStraightColorRoutes));
@@ -1362,7 +1415,9 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
     const result=[],row=Math.floor(index/stage.cols),column=index%stage.cols;
     const [rowDelta,columnDelta]=DELTAS[direction],next=inside(stage,row+rowDelta,column+columnDelta);
     const nextTile=stage.tiles[next];
-    const canCarryRoute=nextTile&&((nextTile.type==='endpoint')||nextTile.type==='cross'||nextTile.touched||nextTile.primed||nextTile.preAligned);
+    // Dual lanes are live in their current orientation even before a player
+    // taps them: a start line that reaches one immediately lights that lane.
+    const canCarryRoute=nextTile&&((nextTile.type==='endpoint')||nextTile.type==='cross'||nextTile.type==='dual'||nextTile.touched||nextTile.primed||nextTile.preAligned);
     if(next>=0&&canCarryRoute&&ports(nextTile).includes(OPP[direction])&&(nextTile.type!=='filter'||nextTile.filterColor===color))result.push(key(next,OPP[direction]));
     exits(stage.tiles[index],direction,color,ignoreTClaim).forEach(exit=>result.push(key(index,exit)));
     return result;
@@ -1658,7 +1713,7 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
       return {type,target:rotation,rotation,required:false,touched:false};
     });
     tiles.forEach((tile,index)=>{const row=Math.floor(index/definition.cols),column=index%definition.cols;tile.preAligned=preAligned.has(pointKey([row,column]));});
-    const stage={index,variant,templateIndex,testLabel:definition.testLabel||null,rows:definition.rows,cols:definition.cols,tiles,moves:0,locked:true,animating:false,hasPlayerMoved:false,completedColors:new Set(),candidateTiles:new Set(),candidateJustActivated:new Set(),colorKeys:[]};
+    const stage={index,variant,templateIndex,testLabel:definition.testLabel||null,rows:definition.rows,cols:definition.cols,tiles,moves:0,locked:true,animating:false,hasPlayerMoved:false,completedColors:new Set(),colorKeys:[]};
     tiles.forEach(tile=>{
       if(tile.type==='cross'||tile.type==='pturn')return;
       if(tile.type==='endpoint'){
@@ -1673,10 +1728,12 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
       if(tile.required&&!tile.preAligned)tile.rotation=(tile.target+span-1)%span;
     });
     tiles.forEach(tile=>{tile.origin=tile.rotation;});
-    stage.perfectMoves=tiles.filter(tile=>tile.required&&tile.type!=='endpoint'&&tile.type!=='cross'&&tile.origin!==tile.target).length;
+    // Dual-lane blocks are still required to solve their stage, but rotating
+    // them is a free action and must not affect move grades.
+    stage.perfectMoves=tiles.filter(tile=>tile.required&&tile.type!=='endpoint'&&tile.type!=='cross'&&tile.type!=='dual'&&tile.origin!==tile.target).length;
     // 생성 시 완료 상태가 되지 않도록 최소 한 개의 일반 경로 타일은 섞습니다.
-    if(!stage.perfectMoves){const candidate=tiles.find(tile=>tile.required&&tile.type!=='endpoint'&&tile.type!=='cross');if(candidate){candidate.rotation=(candidate.target+1)%(candidate.type==='straight'||candidate.type==='filter'?2:4);candidate.origin=candidate.rotation;stage.perfectMoves=1;}}
-    const movableCount=tiles.filter(tile=>tile.type!=='endpoint'&&tile.type!=='cross').length;
+    if(!stage.perfectMoves){const candidate=tiles.find(tile=>tile.required&&tile.type!=='endpoint'&&tile.type!=='cross'&&tile.type!=='dual');if(candidate){candidate.rotation=(candidate.target+1)%(candidate.type==='straight'||candidate.type==='filter'?2:4);candidate.origin=candidate.rotation;stage.perfectMoves=1;}}
+    const movableCount=tiles.filter(tile=>tile.type!=='endpoint'&&tile.type!=='cross'&&tile.type!=='dual').length;
     // Perfect를 기준으로 한 번의 여유만 등급마다 주고, +3회부터는 실패가 됩니다.
     // 작은 보드에서도 모든 조작 가능 블록을 다 만지기 전에 실패하도록 상한을 둡니다.
     // Endpoint-adjacent tiles are candidates too, so compact boards may use every movable tile.
@@ -1689,8 +1746,11 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
   // 아직 건드리지 않은 필수 타일 중 정답 방향과 다른 타일만 추가 Move가 필요합니다.
   // 2차선이 두 색으로 잠긴 경우에는 다른 길을 풀어 복구할 수 있으므로 이 판정만으로 실패시키지 않습니다.
   function hasNoRouteWithinMoves(stage){
+    // A dual lane can always be rotated for free, so do not fail while one is
+    // still waiting to be set to its solution direction.
+    if(stage.tiles.some(tile=>tile.type==='dual'&&(!tile.touched||tile.rotation!==tile.target)))return false;
     const requiredNewMoves=stage.tiles.reduce((count,tile)=>{
-      if(!tile.required||tile.type==='endpoint'||tile.type==='cross'||tile.type==='pturn'||tile.rotation===tile.target||tile.touched)return count;
+      if(!tile.required||tile.type==='endpoint'||tile.type==='cross'||tile.type==='pturn'||tile.type==='dual'||tile.rotation===tile.target||tile.touched)return count;
       return count+1;
     },0);
     return stage.moves+requiredNewMoves>stage.maxMoves;
@@ -1719,8 +1779,9 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
       stage.solutionValidation=validateSpecialUsage(stage);
       if(!stage.solutionValidation.valid)console.warn("Stage ${index+1} has unused solution ports.",stage.solutionValidation);
       stage.connections=connections;
-      stage.candidateTiles=candidateTiles(stage,connections);
-      stage.candidateJustActivated=new Set(stage.candidateTiles);
+      stage.whiteRouteIds=whiteRouteIds(stage,connections);
+      stage.whiteRouteReveals=new Set();
+      stage.startStateDistances=startStateDistances(stage,connections);
       stage.colorKeys=colorKeys(connections);
       lastLayoutByStage[index]=layout.key;
       return stage;
@@ -1753,24 +1814,94 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
     else path='<path class="road-path endpoint-path" d="M50 50H101"/>'+'<rect class="endpoint-core" x="25" y="25" width="50" height="50" rx="20"/>';
     return `<svg class="road-svg" viewBox="0 0 100 100" aria-hidden="true"><g class="road-shape" style="transform:rotate(${displayAngle(tile)}deg)">${path}</g></svg>`;
   }
-  function testTileArt(tile,index,colors,isCandidate){
+  function startDirectionsForTile(index,connections){
+    const directions=new Set();
+    PATH_COLORS.forEach(color=>connections.startStates[color].forEach(state=>{
+      const [tileIndex,direction]=state.split(':').map(Number);
+      if(tileIndex===index)directions.add(direction);
+    }));
+    return directions;
+  }
+  function whiteRouteIds(stage,connections){
+    const ids=new Set();
+    stage.tiles.forEach((tile,index)=>{
+      const directions=startDirectionsForTile(index,connections);
+      if(tile.type==='dual'){
+        [rotate([UP,RIGHT],tile.rotation),rotate([LEFT,DOWN],tile.rotation)].forEach((lane,laneIndex)=>{
+          if(lane.some(direction=>directions.has(direction)))ids.add(`${index}:dual-${laneIndex}`);
+        });
+      }else if(tile.type==='cross'){
+        if(directions.has(LEFT)||directions.has(RIGHT))ids.add(`${index}:cross-horizontal`);
+        if(directions.has(UP)||directions.has(DOWN))ids.add(`${index}:cross-vertical`);
+      }else if(tile.role==='start'||directions.size){
+        ids.add(`${index}:full`);
+      }
+    });
+    return ids;
+  }
+  function startStateDistances(stage,connections){
+    const distances=new Map();
+    PATH_COLORS.forEach(color=>{
+      const allowed=connections.startStates[color],queue=[];
+      stage.tiles.forEach((tile,index)=>{
+        if(tile.type!=='endpoint'||tile.role!=='start'||tile.color!==color)return;
+        endpointPorts(tile).forEach(direction=>{
+          const state=key(index,direction);
+          if(!allowed.has(state)||distances.has(state))return;
+          distances.set(state,0);queue.push([index,direction,color]);
+        });
+      });
+      while(queue.length){
+        const [index,direction,pathColor]=queue.shift(),distance=distances.get(key(index,direction));
+        neighbors(stage,index,direction,pathColor).forEach(next=>{
+          if(!allowed.has(next)||distances.has(next))return;
+          distances.set(next,distance+1);
+          const [nextIndex,nextDirection]=next.split(':').map(Number);
+          queue.push([nextIndex,nextDirection,pathColor]);
+        });
+      }
+    });
+    return distances;
+  }
+  function routeFillOrder(stage,connections,distances,id){
+    const [indexText,segment]=id.split(':'),index=Number(indexText),tile=stage.tiles[index];
+    let directions=[];
+    if(segment==='dual-0')directions=rotate([UP,RIGHT],tile.rotation);
+    else if(segment==='dual-1')directions=rotate([LEFT,DOWN],tile.rotation);
+    else if(segment==='cross-horizontal')directions=[LEFT,RIGHT];
+    else if(segment==='cross-vertical')directions=[UP,DOWN];
+    else directions=[...startDirectionsForTile(index,connections)];
+    const nearest=Math.min(...directions.map(direction=>distances.get(key(index,direction))??Infinity));
+    return Number.isFinite(nearest)?Math.floor(nearest/2):0;
+  }
+  function whiteRoadMarkup(index,src,angle,segment,directions){
+    const id=`${index}:${segment}`,revealing=game.whiteRouteReveals?.has(id);
+    let entry=UP,distance=Infinity;
+    directions.forEach(direction=>{
+      const candidate=game.startStateDistances?.get(key(index,direction));
+      if(Number.isFinite(candidate)&&(!Number.isFinite(distance)||candidate<distance)){entry=direction;distance=candidate;}
+    });
+    const names=['top','right','bottom','left'];
+    const revealClass=revealing?` route-fill route-fill-from-${names[entry]}`:'';
+    const order=Number.isFinite(distance)?Math.floor(distance/2):0;
+    const road=`<img class="test-road-art test-road-active" src="assets/${src}" style="transform:rotate(${angle}deg)" alt="">`;
+    // The wipe mask stays in the board coordinate system while the road image
+    // rotates inside it. This makes the fill travel from the connected edge.
+    return revealing?`<span class="test-road-fill-mask${revealClass}" style="--route-fill-order:${order}">${road}</span>`:road;
+  }
+  function testTileArt(tile,index,colors){
     // The supplied 2-way PNG filenames are opposite to their visible ports:
     // 2_a is straight (left/right), while 2_b is corner (left/down).
     const lineByType={straight:'line_straight.png',filter:'line_straight.png',corner:'line_curve.png',tee:'line_t.png?v=v0-3-tee-resource-2',cross:'line_start_cross.png',pturn:'line_start_cross.png',dual:'line_two_line.png',endpoint:'line_start_end.png',start2a:'line_start_end_2_b.png',start2b:'line_start_end_2_a.png',start3:'line_start_end_3.png',start4:'line_start_end_4.png'};
     const blockByColor={green:'block_green.png',blue:'block_blue.png',red:'block_red.png'};
-    const laneColors=tile.type==='dual'?dualLaneColors(tile,index,game.connections).filter(Boolean):[];
-    const solidColor=tile.type==='endpoint'?tile.color:(laneColors[0]||[...colors][0]||tile.completedColor||null);
-    const mixed=tile.type==='dual'&&laneColors.length===2&&laneColors[0]!==laneColors[1];
-    // The block split and the two-line artwork share the same lane order:
-    // lane 0 is the up→right curve and lane 1 is the left→down curve.
-    // Keeping this order is essential after rotation; swapping it makes both
-    // colours appear on the opposite physical lane.
-    const displayLaneColors=laneColors;
-    const base=mixed
-      ?`<img class="test-block-art test-dual-base" src="assets/${blockByColor[displayLaneColors[0]]}" alt=""><img class="test-block-art test-dual-cut" src="assets/${blockByColor[displayLaneColors[1]]}" alt=""><img class="test-block-art test-dual-bottom" src="assets/${blockByColor[displayLaneColors[1]]}" alt="">`
-      :`<img class="test-block-art" src="assets/${tile.type==='cross'||tile.type==='pturn'?'block_black.png':blockByColor[solidColor]||'block_off.png'}" alt="">`;
-    const light=isCandidate?'<img class="test-light-art" src="assets/block_off_light.png" alt="">':'';
-    const lineOpacity=(solidColor||mixed||isCandidate||tile.type==='endpoint'||tile.type==='cross'||tile.type==='pturn')?'':' test-road-off';
+    const startDirections=startDirectionsForTile(index,game.connections);
+    const solidColor=tile.type==='endpoint'?tile.color:([...colors][0]||tile.completedColor||null);
+    const usesBlackBlock=['cross','pturn','dual'].includes(tile.type);
+    // Completely inactive standard blocks keep the original pale off-road.
+    // Black roads begin only once a colored route reaches the block, or on a
+    // dedicated black special block (cross / dual lane).
+    const usesInactiveRoad=!usesBlackBlock&&!solidColor;
+    const base=`<img class="test-block-art" src="assets/${usesBlackBlock?'block_black.png':blockByColor[solidColor]||'block_off.png'}" alt="">`;
     const startText=tile.type==='endpoint'&&tile.role==='start'?`<img class="test-start-art" src="assets/${tile.color}_text_start.png" alt="">`:'';
     // Image source-port conventions:
     // curve = left/down, start-end = left, straight = left/right,
@@ -1781,7 +1912,28 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
       :tile.type==='corner'||tile.type==='dual'?((tile.rotation+2)%4)*90
       :tile.type==='tee'?tile.rotation*90
       :0;
-    return `<span class="test-tile-art${mixed?` test-dual-${tile.rotation%2}`:''}">${base}${light}<img class="test-road-art${lineOpacity}" src="assets/${lineByType[artType]}" style="transform:rotate(${roadAngle}deg)" alt="">${startText}</span>`;
+    let blackRoad=`<img class="test-road-art ${usesInactiveRoad?'test-road-off':'test-road-black'}" src="assets/${lineByType[artType]}" style="transform:rotate(${roadAngle}deg)" alt="">`;
+    let activeRoad='';
+    if(tile.type==='dual'){
+      const lanes=[rotate([UP,RIGHT],tile.rotation),rotate([LEFT,DOWN],tile.rotation)];
+      // A dual lane is exactly two non-overlapping curve sprites. Each lane
+      // switches independently from 30% black to white at the instant a
+      // start-side route reaches it.
+      blackRoad=lanes.map((lane,laneIndex)=>lane.some(direction=>startDirections.has(direction))
+        ?whiteRoadMarkup(index,'line_curve.png',laneIndex===0?roadAngle:tile.rotation*90,`dual-${laneIndex}`,lane)
+        :`<img class="test-road-art test-road-black" src="assets/line_curve.png" style="transform:rotate(${laneIndex===0?roadAngle:tile.rotation*90}deg)" alt="">`
+      ).join('');
+    }else if(tile.type==='cross'){
+      const horizontal=startDirections.has(LEFT)||startDirections.has(RIGHT);
+      const vertical=startDirections.has(UP)||startDirections.has(DOWN);
+      if(horizontal)activeRoad+=whiteRoadMarkup(index,'line_straight.png',0,'cross-horizontal',[LEFT,RIGHT]);
+      if(vertical)activeRoad+=whiteRoadMarkup(index,'line_straight.png',90,'cross-vertical',[UP,DOWN]);
+    }else if(tile.type==='pturn'){
+      if(startDirections.size)activeRoad=whiteRoadMarkup(index,'line_start_cross.png',0,'full',[...startDirections]);
+    }else if(tile.role==='start'||startDirections.size){
+      activeRoad=whiteRoadMarkup(index,lineByType[artType],roadAngle,'full',[...startDirections]);
+    }
+    return `<span class="test-tile-art${tile.type==='dual'?` test-dual-${tile.rotation%2}`:''}">${base}${blackRoad}${activeRoad}${startText}</span>`;
   }
   function dualLaneColors(tile,index,connections){
     const lanes=[rotate([UP,RIGHT],tile.rotation),rotate([LEFT,DOWN],tile.rotation)];
@@ -1809,13 +1961,11 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
   }
   function render(){
     game.connections=resolveConnections(game);
-    const candidateBlinkDelay=-((Date.now()%500));
-    const previousCandidates=game.candidateTiles||new Set(),nextCandidates=candidateTiles(game,game.connections);
-    const justActivated=game.candidateJustActivated&&game.candidateJustActivated.size
-      ?new Set(game.candidateJustActivated)
-      :new Set([...nextCandidates].filter(index=>!previousCandidates.has(index)));
-    const releasedCandidates=new Set([...previousCandidates].filter(index=>!nextCandidates.has(index)));
-    game.candidateTiles=nextCandidates;game.candidateJustActivated=new Set();
+    const previousWhiteRouteIds=game.whiteRouteIds||new Set(),nextWhiteRouteIds=whiteRouteIds(game,game.connections);
+    game.whiteRouteReveals=new Set([...nextWhiteRouteIds].filter(id=>!previousWhiteRouteIds.has(id)));
+    game.whiteRouteIds=nextWhiteRouteIds;
+    game.startStateDistances=startStateDistances(game,game.connections);
+    game.routeFillWaitMs=[...game.whiteRouteReveals].reduce((wait,id)=>Math.max(wait,(routeFillOrder(game,game.connections,game.startStateDistances,id)+1)*ROUTE_FILL_MS),0);
     const previousColorKeys=game.colorKeys||[],nextColorKeys=colorKeys(game.connections),connectionTransitions=new Map();
     let transitionOrder=0;
     nextColorKeys.forEach((next,index)=>{
@@ -1834,20 +1984,13 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
     board.style.gridTemplateColumns=`repeat(${game.cols},1fr)`;board.innerHTML='';
     game.tiles.forEach((tile,index)=>{
       const colors=game.connections.colorsByTile[index],button=document.createElement('button');
-      const isCandidate=game.candidateTiles.has(index);
-      const isAllowed=tile.type==='endpoint'||tile.touched||tile.primed||colors.size>0||isCandidate;
       const classes=['tile',tile.type,visualClass(tile,colors)];
       classes.push('test-art-tile');
       if(tile.type==='endpoint')classes.push('endpoint');
-      if(isCandidate){classes.push('candidate');button.style.setProperty('--candidate-blink-delay',`${candidateBlinkDelay}ms`);}
-      if(isCandidate&&justActivated.has(index))classes.push('candidate-enter');
-      const isCandidateRelease=releasedCandidates.has(index)&&!isCandidate&&!colors.size;
-      if(isCandidateRelease)classes.push('candidate-release');
-      if(tile.type!=='cross'&&tile.type!=='pturn'&&!(tile.type==='endpoint'&&tile.sourceShape==='start4')&&isAllowed)classes.push('rotatable');
+      if(tile.type!=='cross'&&tile.type!=='pturn'&&!(tile.type==='endpoint'&&tile.sourceShape==='start4'))classes.push('rotatable');
       const transition=connectionTransitions.get(index);
       if(transition)classes.push(transition.kind);
       button.className=classes.join(' ');button.style.setProperty('--order',index);button.style.setProperty('--endpoint-color',COLORS[tile.color]||COLORS.green);button.style.zIndex=String(Math.floor(index/game.cols)+1);
-      if(isCandidateRelease)button.style.setProperty('--candidate-release-to',backgroundForClass(tile,colors));
       if(transition){
         const fromColors=new Set((transition.from||'').split('|').filter(Boolean));
         button.style.setProperty('--sequence',transition.order);
@@ -1862,8 +2005,8 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
         button.style.setProperty('--dual-gradient-direction',dualGradientDirection(tile.rotation));
       }
       button.setAttribute('role','gridcell');
-      button.setAttribute('aria-label',tile.type==='endpoint'?(tile.role==='start'?(tile.sourceShape?`Start ${endpointPorts(tile).length} way`:'Start'):'Finish'):tile.type==='tee'?'T junction':tile.type==='dual'?'Dual lane':tile.type==='cross'?'Cross junction':isCandidate?'Available route tile':'Route tile');
-      button.innerHTML=testTileArt(tile,index,colors,isCandidate);
+      button.setAttribute('aria-label',tile.type==='endpoint'?(tile.role==='start'?(tile.sourceShape?`Start ${endpointPorts(tile).length} way`:'Start'):'Finish'):tile.type==='tee'?'T junction':tile.type==='dual'?'Dual lane':tile.type==='cross'?'Cross junction':'Route tile');
+      button.innerHTML=testTileArt(tile,index,colors);
       if(!button.disabled)button.addEventListener('click',()=>turn(index));
       board.append(button);
     });
@@ -1878,26 +2021,23 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
   function lockedJiggle(index){
     if(game.locked)return;const element=board.children[index];element.classList.remove('locked-jiggle');void element.offsetWidth;element.classList.add('locked-jiggle');
   }
+  function clearAfterRouteFill(){
+    const finishedGame=game,wait=game.routeFillWaitMs||0;
+    if(!wait){clearStage();return;}
+    game.locked=true;
+    setTimeout(()=>{if(game===finishedGame)clearStage();},wait);
+  }
   function turn(index){
     if(game.locked||game.animating)return;
     const tile=game.tiles[index],isEndpoint=tile.type==='endpoint';
     if(tile.type==='cross'||tile.type==='pturn'||(tile.type==='endpoint'&&tile.sourceShape==='start4'))return;
-    const currentColors=game.connections.colorsByTile[index],isCandidate=game.candidateTiles.has(index);
-    const isAllowed=isEndpoint||tile.touched||tile.primed||currentColors.size>0||isCandidate;
-    if(!isAllowed){lockedJiggle(index);return;}
-    // A correctly aligned candidate joins the route without rotating or using a move.
-    if(!isEndpoint&&isCandidate&&!tile.touched&&!tile.primed&&tileConnectsToActive(game,index,game.connections)){
-      tile.primed=true;game.hasPlayerMoved=true;
-      game.connections=resolveConnections(game);
-      const completedTiles=updateCompletedColors(game,game.connections);
-      render();
-      completedTiles.forEach(tileIndex=>board.children[tileIndex]?.classList.add('route-complete-pop'));
-      if(isComplete(game,game.connections))clearStage();
-      return;
-    }
     if(!isEndpoint&&!tile.touched){
-      if(game.moves>=game.maxMoves)return;
-      tile.touched=true;game.moves++;
+      // Two-line blocks are mandatory puzzle pieces, but are free to rotate.
+      if(tile.type!=='dual'){
+        if(game.moves>=game.maxMoves)return;
+        game.moves++;
+      }
+      tile.touched=true;
     }
     game.hasPlayerMoved=true;
     const span=tile.type==='endpoint'?endpointRotationSpan(tile):tile.type==='straight'||tile.type==='filter'?2:4;
@@ -1910,8 +2050,9 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
     render();
     board.children[index]?.classList.add('turn-click');
     completedTiles.forEach(tileIndex=>board.children[tileIndex]?.classList.add('route-complete-pop'));
-    if(game.moves>=game.maxMoves)over('exhausted');
-    else if(isComplete(game,game.connections))clearStage();
+    const hasFreeDualMove=game.tiles.some(item=>item.type==='dual'&&(!item.touched||item.rotation!==item.target));
+    if(isComplete(game,game.connections))clearAfterRouteFill();
+    else if(game.moves>=game.maxMoves&&!hasFreeDualMove)over('exhausted');
     else if(hasNoRouteWithinMoves(game))over('no-route');
   }
   function showGame(){stageTestScreen.classList.remove('show');designScreen.classList.remove('show');homeScreen.classList.remove('show');gameScreen.classList.remove('hidden');}
@@ -1919,12 +2060,11 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
   const stageNumberInEpisode=index=>index%EPISODE_SIZE+1;
   const visibleEpisode=()=>adminMode?(adminEpisode??episodeForStage(progress.current)):(homeEpisode??episodeForStage(progress.current));
   function showHome(episodeOverride=null){clearInterval(timerId);clearTimeout(startTimeout);modal.classList.remove('show');startOverlay.classList.remove('show');resetModal.classList.remove('show');stageTestScreen.classList.remove('show');designScreen.classList.remove('show');homeEpisode=Number.isInteger(episodeOverride)?episodeOverride:episodeForStage(progress.current);gameScreen.classList.add('hidden');homeScreen.classList.add('show');renderHome();requestAnimationFrame(()=>{const focus=homeStageList.querySelector('.current')||homeStageList.firstElementChild;if(focus)focus.scrollIntoView({block:'center'});});}
-  function designCard(label,{block='block_off.png',line,text,off=false,light=false,dual=[]}={}){
+  function designCard(label,{block='block_off.png',line,text,off=false,dual=[]}={}){
     const bases=dual.length?dual.map((asset,index)=>`<img class="design-sample-block design-dual-layer design-dual-layer-${index}" src="assets/${asset}" alt="">`).join('')+`<img class="design-sample-block design-dual-bottom" src="assets/${dual[1]}" alt="">`:`<img class="design-sample-block" src="assets/${block}" alt="">`;
-    const lightLayer=light?'<img class="design-sample-light" src="assets/block_off_light.png" alt="">':'';
     const lineLayer=line?`<img class="design-overlay design-line${off?' design-off-line':''}" src="assets/${line}" alt="">`:'';
     const textLayer=text?`<img class="design-overlay design-start-text" src="assets/${text}" alt="">`:'';
-    return `<article class="design-card"><div class="design-sample">${bases}${lightLayer}${lineLayer}${textLayer}</div><p>${label}</p></article>`;
+    return `<article class="design-card"><div class="design-sample">${bases}${lineLayer}${textLayer}</div><p>${label}</p></article>`;
   }
   function designGroup(title,cards){return `<section class="design-group"><h2>${title}</h2><div class="design-gallery">${cards.join('')}</div></section>`;}
   function renderDesignPreview(){
@@ -1940,8 +2080,7 @@ let adminMode=false,adminEpisode=null,homeEpisode=null,homeToolsHoldTimer=null;
     const dualGroup=designGroup('COLOR COMBINATION / TWO LINE',[
       designCard('RED + GREEN',{line:'line_two_line.png',dual:['block_red.png','block_green.png']}),
       designCard('RED + BLUE',{line:'line_two_line.png',dual:['block_red.png','block_blue.png']}),
-      designCard('GREEN + BLUE',{line:'line_two_line.png',dual:['block_green.png','block_blue.png']}),
-      designCard('ACTIVE CANDIDATE',{line:'line_curve.png',light:true})
+      designCard('GREEN + BLUE',{line:'line_two_line.png',dual:['block_green.png','block_blue.png']})
     ]);
     designContent.innerHTML=`<p class="design-caption">PARENT BOTTOM-LEFT / CHILD CENTER / X 100 Y 112</p>${colorGroups.join('')}${offGroup}${blackGroup}${dualGroup}`;
   }

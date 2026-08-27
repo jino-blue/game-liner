@@ -51,6 +51,34 @@
 .test-road-art{left:-1px;top:-1px;width:calc(100% + 2px);height:calc(94.3396% + 2px)}
 /* Candidate glow shares a global half-second phase, so rebuilding the board cannot restart its blink. */
 .test-light-art{animation-delay:var(--candidate-blink-delay,0ms)}
+/* The supplied block artwork is square (200×200): no lower 12px overlap remains.
+   Road sprites and start labels retain their former 200px-coordinate positions. */
+.design-sample{height:min(18.5185dvw,10.4167dvh)}
+.design-sample-block,.design-sample-light{height:100%}
+.design-overlay{top:50%}
+.design-dual-layer-1{clip-path:polygon(0 0,100% 100%,0 100%)}
+.design-dual-bottom{clip-path:inset(100% 0 0 0)}
+.test-tile-art{height:100%}
+.test-road-art{height:calc(100% + 2px)}
+.test-start-art{top:50%;height:28%}
+.test-dual-0 .test-dual-cut{clip-path:polygon(0 0,100% 100%,0 100%)}
+.test-dual-0 .test-dual-bottom{clip-path:inset(100% 0 0 0)}
+.test-dual-1 .test-dual-cut{clip-path:polygon(0 0,100% 0,0 100%)}
+.test-dual-1 .test-dual-bottom{clip-path:inset(100% 0 0 0)}
+/* v0.5: every route starts as a 30% black line.  A duplicate white sprite is
+   revealed only from the start-side connection, so finish-side routes stay dark. */
+.test-road-black{left:0;top:0;width:100%;height:100%;opacity:.3;filter:brightness(0)}
+.test-road-active{opacity:1;filter:none}
+.test-road-fill-mask{position:absolute;inset:-1px;overflow:hidden;pointer-events:none}
+.test-road-fill-mask.route-fill{animation-duration:.18s;animation-timing-function:linear;animation-delay:calc(var(--route-fill-order)*180ms);animation-fill-mode:both}
+.test-road-fill-mask.route-fill-from-top{animation-name:route-fill-from-top}
+.test-road-fill-mask.route-fill-from-right{animation-name:route-fill-from-right}
+.test-road-fill-mask.route-fill-from-bottom{animation-name:route-fill-from-bottom}
+.test-road-fill-mask.route-fill-from-left{animation-name:route-fill-from-left}
+@keyframes route-fill-from-top{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0)}}
+@keyframes route-fill-from-right{from{clip-path:inset(0 0 0 100%)}to{clip-path:inset(0)}}
+@keyframes route-fill-from-bottom{from{clip-path:inset(100% 0 0 0)}to{clip-path:inset(0)}}
+@keyframes route-fill-from-left{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0)}}
 /* Clear grades: 1 star for Clear, 2 for Great, and 3 for Perfect. */
 .modal-stars{display:flex;min-height:56px;align-items:center;justify-content:center;gap:7px;margin:8px 0 2px}.result-star{display:block;width:54px;height:54px;overflow:visible}.result-star path{fill:#ffd459;stroke:#efb937;stroke-width:1.8;stroke-linejoin:round}.result-star.star-reveal{opacity:0;animation:result-star-reveal .52s cubic-bezier(.18,.9,.24,1.35) calc(.12s + var(--star-index)*.22s) both}@keyframes result-star-reveal{0%{opacity:0;transform:scale(.15) rotate(-20deg);filter:brightness(2.2)}48%{opacity:1;transform:scale(1.42) rotate(9deg);filter:brightness(1.45)}72%{transform:scale(.91) rotate(-3deg);filter:brightness(1.1)}100%{opacity:1;transform:scale(1) rotate(0);filter:brightness(1)}}.home-stage.great{background:#dc9a45;color:#80531f}.home-stage.great::after{content:"";position:absolute;z-index:-1;top:-22px;left:50%;width:12px;height:22px;transform:translateX(-50%);background:#cbab85}.home-stars{display:flex!important;align-items:center;justify-content:center;gap:3px;margin-top:6px}.home-star{display:block;width:clamp(24px,6vw,34px);height:clamp(24px,6vw,34px);overflow:visible}.home-star path{fill:#fff7d5;stroke:#f2d58f;stroke-width:2;stroke-linejoin:round}
 /* Stage select: compact five-column map based on the supplied mobile layout. */
