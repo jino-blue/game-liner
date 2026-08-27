@@ -1,0 +1,7 @@
+/* Keep the stage screen hidden until the player explicitly opens HOME. */
+#homeScreen:not(.show){display:none}
+
+/* Stage button states: perfect clear, playable GO callout, and level colours. */
+.home-stage.perfect .home-stage-number{color:#714274}
+.home-stage.current .home-stage-number,.home-stage.admin-current .home-stage-number{bottom:23.3333%;color:#9e3737;font-size:3.7037cqi;text-shadow:0 calc(.1852cqi) rgb(255 255 255 / 13%)}
+.stage-go{position:absolute;z-index:2;left:50%;bottom:60.8333%;margin:0;transform:translate(-50%,calc(50% + .5556cqi));color:#fff;font-family:"LINE Bold","Malgun Gothic",sans-serif;font-size:5.5556cqi;font-weight:950;line-height:1;text-shadow:0 calc(.1852cqi) rgb(0 0 0 / 10%);white-space:nowrap;pointer-events:none}
